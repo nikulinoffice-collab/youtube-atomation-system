@@ -1,11 +1,13 @@
-"""Semantic storyboard planner with strict fail-closed validation.
+"""Storyboard Agent with deterministic timing and semantic Gemini enrichment.
 
-Gemini selects contiguous canonical word-index ranges. Python, not the model,
-derives timestamps from narration_timeline_<timestamp>.json. One semantic repair
-pass is allowed; transport retries do not count as semantic repair.
+Python owns scene boundaries. It uses dynamic programming over canonical word timings
+to produce 8-12 contiguous scenes within hard duration limits, preferring punctuation,
+pauses and ~3-second beats. Gemini can only enrich those fixed scenes with semantic
+metadata. One semantic repair pass is allowed; malformed metadata fails closed.
 """
 
 import json
+import math
 import os
 import re
 import time
@@ -21,11 +23,11 @@ load_dotenv()
 OUTPUT_DIR = Path(__file__).parent / "output"
 API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
-
 MIN_SCENES = 8
 MAX_SCENES = 12
 MIN_SCENE_SECONDS = 1.2
 MAX_SCENE_SECONDS = 6.0
+TARGET_SCENE_SECONDS = 3.1
 MIN_QUERIES = 2
 MAX_QUERIES = 4
 ALLOWED_PURPOSES = {
@@ -40,10 +42,123 @@ class StoryboardValidationError(ValueError):
 
 
 def find_latest_timeline() -> Path:
-    matches = sorted(OUTPUT_DIR.glob("narration_timeline_*.json"))
-    if not matches:
+    files = sorted(OUTPUT_DIR.glob("narration_timeline_*.json"))
+    if not files:
         raise SystemExit("No narration_timeline_*.json found. Run voice_agent.py first.")
-    return matches[-1]
+    return files[-1]
+
+
+def canonical_scene_text(words: list[dict], start_word: int, end_word: int) -> str:
+    return "".join(
+        str(w.get("separator_before", "")) + str(w["word"])
+        for w in words[start_word : end_word + 1]
+    ).strip()
+
+
+def boundary_bonus(words: list[dict], end_word: int) -> float:
+    """Lower DP cost for natural semantic boundaries."""
+    token = str(words[end_word]["word"]).rstrip()
+    bonus = 0.0
+    if re.search(r"[.!?][\"'’”)]*$", token):
+        bonus -= 2.4
+    elif re.search(r"[:;][\"'’”)]*$", token):
+        bonus -= 1.2
+    elif re.search(r",[\"'’”)]*$", token):
+        bonus -= 0.5
+    if end_word + 1 < len(words):
+        gap = float(words[end_word + 1]["start"]) - float(words[end_word]["end"])
+        if gap >= 0.35:
+            bonus -= 1.0
+        elif gap >= 0.20:
+            bonus -= 0.4
+    return bonus
+
+
+def segment_cost(words: list[dict], start_word: int, end_word: int) -> float | None:
+    duration = float(words[end_word]["end"]) - float(words[start_word]["start"])
+    if duration < MIN_SCENE_SECONDS or duration > MAX_SCENE_SECONDS:
+        return None
+    duration_cost = (duration - TARGET_SCENE_SECONDS) ** 2
+    edge_penalty = 0.0
+    if duration < 2.0:
+        edge_penalty += (2.0 - duration) * 1.5
+    if duration > 4.3:
+        edge_penalty += (duration - 4.3) * 1.1
+    return duration_cost + edge_penalty + boundary_bonus(words, end_word)
+
+
+def deterministic_partition(timeline: dict) -> list[dict]:
+    """Find the lowest-cost feasible 8-12 scene partition via dynamic programming."""
+    words = timeline.get("words")
+    if not isinstance(words, list) or not words:
+        raise StoryboardValidationError("Narration timeline contains no words.")
+    n = len(words)
+    speech_duration = float(words[-1]["end"]) - float(words[0]["start"])
+    preferred_count = min(MAX_SCENES, max(MIN_SCENES, round(speech_duration / TARGET_SCENE_SECONDS)))
+
+    best_overall: tuple[float, list[tuple[int, int]]] | None = None
+    for scene_count in range(MIN_SCENES, MAX_SCENES + 1):
+        # dp[k][i] = (cost, ranges), covering words [0, i) with k scenes.
+        dp: list[dict[int, tuple[float, list[tuple[int, int]]]]] = [dict() for _ in range(scene_count + 1)]
+        dp[0][0] = (0.0, [])
+        for k in range(scene_count):
+            for start_exclusive, (base_cost, ranges) in list(dp[k].items()):
+                start_word = start_exclusive
+                # leave at least one word for each remaining scene
+                max_end = n - (scene_count - k - 1) - 1
+                for end_word in range(start_word, max_end + 1):
+                    cost = segment_cost(words, start_word, end_word)
+                    if cost is None:
+                        continue
+                    next_i = end_word + 1
+                    candidate = (base_cost + cost, ranges + [(start_word, end_word)])
+                    existing = dp[k + 1].get(next_i)
+                    if existing is None or candidate[0] < existing[0]:
+                        dp[k + 1][next_i] = candidate
+        complete = dp[scene_count].get(n)
+        if complete is None:
+            continue
+        count_penalty = abs(scene_count - preferred_count) * 0.35
+        candidate_total = complete[0] + count_penalty
+        if best_overall is None or candidate_total < best_overall[0]:
+            best_overall = (candidate_total, complete[1])
+
+    if best_overall is None:
+        raise StoryboardValidationError(
+            f"No feasible {MIN_SCENES}-{MAX_SCENES} scene partition satisfies "
+            f"{MIN_SCENE_SECONDS}-{MAX_SCENE_SECONDS}s hard duration bounds."
+        )
+
+    result = []
+    for scene_id, (start_word, end_word) in enumerate(best_overall[1], start=1):
+        start = float(words[start_word]["start"])
+        end = float(words[end_word]["end"])
+        result.append({
+            "scene_id": scene_id,
+            "start_word": start_word,
+            "end_word": end_word,
+            "start": round(start, 4),
+            "end": round(end, 4),
+            "duration": round(end - start, 4),
+            "narration": canonical_scene_text(words, start_word, end_word),
+        })
+    validate_fixed_ranges(result, words)
+    return result
+
+
+def validate_fixed_ranges(scenes: list[dict], words: list[dict]) -> None:
+    if not (MIN_SCENES <= len(scenes) <= MAX_SCENES):
+        raise StoryboardValidationError("Deterministic partition scene count is invalid.")
+    expected = 0
+    for scene in scenes:
+        if int(scene["start_word"]) != expected:
+            raise StoryboardValidationError("Deterministic scene ranges are not contiguous.")
+        duration = float(scene["duration"])
+        if duration < MIN_SCENE_SECONDS - 1e-6 or duration > MAX_SCENE_SECONDS + 1e-6:
+            raise StoryboardValidationError("Deterministic scene violates hard duration bounds.")
+        expected = int(scene["end_word"]) + 1
+    if expected != len(words):
+        raise StoryboardValidationError("Deterministic partition does not cover all words.")
 
 
 def extract_json(text: str) -> dict:
@@ -54,193 +169,106 @@ def extract_json(text: str) -> dict:
     return data
 
 
-def canonical_scene_text(words: list[dict], start_word: int, end_word: int) -> str:
-    return "".join(
-        str(w.get("separator_before", "")) + str(w["word"])
-        for w in words[start_word : end_word + 1]
-    ).strip()
-
-
 def normalize_queries(value: Any) -> list[str]:
     if not isinstance(value, list):
-        raise StoryboardValidationError("search_queries must be a JSON array.")
-    queries = [str(item).strip() for item in value]
+        raise StoryboardValidationError("search_queries must be an array.")
+    queries = [str(q).strip() for q in value]
     if not (MIN_QUERIES <= len(queries) <= MAX_QUERIES):
-        raise StoryboardValidationError(
-            f"Each scene requires {MIN_QUERIES}-{MAX_QUERIES} search queries."
-        )
-    if any(not q or len(q) < 3 or len(q) > 120 for q in queries):
-        raise StoryboardValidationError("Search queries must be non-empty and 3-120 chars.")
+        raise StoryboardValidationError(f"Each scene requires {MIN_QUERIES}-{MAX_QUERIES} queries.")
+    if any(len(q) < 3 or len(q) > 120 for q in queries):
+        raise StoryboardValidationError("Search queries must be 3-120 characters.")
     if len({q.casefold() for q in queries}) != len(queries):
-        raise StoryboardValidationError("search_queries must be unique within a scene.")
+        raise StoryboardValidationError("Search queries must be unique within a scene.")
     return queries
 
 
-def materialize_and_validate(raw: dict, timeline: dict, source_timeline: str) -> dict:
-    words = timeline.get("words")
-    if not isinstance(words, list) or not words:
-        raise StoryboardValidationError("Narration timeline contains no words.")
+def enrich_and_validate(raw: dict, fixed_scenes: list[dict], timeline: dict, source_timeline: str) -> dict:
     raw_scenes = raw.get("scenes")
-    if not isinstance(raw_scenes, list):
-        raise StoryboardValidationError("Storyboard must contain a scenes array.")
-    if not (MIN_SCENES <= len(raw_scenes) <= MAX_SCENES):
+    if not isinstance(raw_scenes, list) or len(raw_scenes) != len(fixed_scenes):
         raise StoryboardValidationError(
-            f"Storyboard must contain {MIN_SCENES}-{MAX_SCENES} scenes; got {len(raw_scenes)}."
+            f"Semantic response must contain exactly {len(fixed_scenes)} scenes."
         )
-
-    scenes: list[dict] = []
-    expected_start = 0
-    for scene_id, raw_scene in enumerate(raw_scenes, start=1):
-        if not isinstance(raw_scene, dict):
-            raise StoryboardValidationError(f"Scene {scene_id} must be an object.")
-        try:
-            start_word = int(raw_scene["start_word"])
-            end_word = int(raw_scene["end_word"])
-        except (KeyError, TypeError, ValueError) as exc:
+    enriched = []
+    for fixed, meta in zip(fixed_scenes, raw_scenes):
+        if not isinstance(meta, dict) or int(meta.get("scene_id", -1)) != fixed["scene_id"]:
             raise StoryboardValidationError(
-                f"Scene {scene_id} requires integer start_word/end_word."
-            ) from exc
-
-        if start_word != expected_start:
-            raise StoryboardValidationError(
-                f"Scene {scene_id} must start at word {expected_start}, got {start_word}; "
-                "gaps and overlaps are forbidden."
+                f"Semantic scene IDs must be exactly 1..{len(fixed_scenes)} in order."
             )
-        if end_word < start_word or end_word >= len(words):
-            raise StoryboardValidationError(
-                f"Scene {scene_id} has invalid word range {start_word}..{end_word}."
-            )
-
-        start = float(words[start_word]["start"])
-        end = float(words[end_word]["end"])
-        duration = end - start
-        if duration < MIN_SCENE_SECONDS or duration > MAX_SCENE_SECONDS:
-            raise StoryboardValidationError(
-                f"Scene {scene_id} duration {duration:.3f}s is outside "
-                f"{MIN_SCENE_SECONDS:.1f}-{MAX_SCENE_SECONDS:.1f}s. "
-                "Merge an undersized scene with an adjacent semantic scene; do not just "
-                "move the same short range to another scene."
-            )
-
-        purpose = str(raw_scene.get("purpose", "")).strip()
+        purpose = str(meta.get("purpose", "")).strip()
         if purpose not in ALLOWED_PURPOSES:
-            raise StoryboardValidationError(f"Scene {scene_id} purpose {purpose!r} is invalid.")
-        visual_intent = str(raw_scene.get("visual_intent", "")).strip()
+            raise StoryboardValidationError(f"Scene {fixed['scene_id']} has invalid purpose {purpose!r}.")
+        visual_intent = str(meta.get("visual_intent", "")).strip()
         if len(visual_intent) < 12 or len(visual_intent) > 240:
             raise StoryboardValidationError(
-                f"Scene {scene_id} visual_intent must be 12-240 characters."
+                f"Scene {fixed['scene_id']} visual_intent must be 12-240 characters."
             )
         if visual_intent.casefold() in {"ai", "artificial intelligence", "technology", "tech"}:
-            raise StoryboardValidationError(
-                f"Scene {scene_id} visual_intent is too generic: {visual_intent!r}."
-            )
-        asset_type = str(raw_scene.get("preferred_asset_type", "either")).strip()
+            raise StoryboardValidationError(f"Scene {fixed['scene_id']} visual_intent is too generic.")
+        asset_type = str(meta.get("preferred_asset_type", "either")).strip()
         if asset_type not in ALLOWED_ASSET_TYPES:
-            raise StoryboardValidationError(
-                f"Scene {scene_id} preferred_asset_type {asset_type!r} is invalid."
-            )
-
-        scenes.append({
-            "scene_id": scene_id,
-            "start_word": start_word,
-            "end_word": end_word,
-            "start": round(start, 4),
-            "end": round(end, 4),
-            "duration": round(duration, 4),
-            "narration": canonical_scene_text(words, start_word, end_word),
+            raise StoryboardValidationError(f"Scene {fixed['scene_id']} has invalid asset type.")
+        enriched.append({
+            **fixed,
             "purpose": purpose,
             "visual_intent": visual_intent,
-            "search_queries": normalize_queries(raw_scene.get("search_queries")),
+            "search_queries": normalize_queries(meta.get("search_queries")),
             "preferred_asset_type": asset_type,
         })
-        expected_start = end_word + 1
-
-    if expected_start != len(words):
-        raise StoryboardValidationError(
-            f"Storyboard stops at word {expected_start - 1}; final word is {len(words) - 1}."
-        )
-    for left, right in zip(scenes, scenes[1:]):
-        if right["start_word"] != left["end_word"] + 1:
-            raise StoryboardValidationError("Storyboard word coverage is not contiguous.")
-        if right["start"] + 1e-6 < left["end"]:
-            raise StoryboardValidationError("Storyboard scene timings overlap.")
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "timing_strategy": "deterministic_dp",
         "source_timeline": source_timeline,
         "model": MODEL,
         "duration": float(timeline["duration"]),
         "speech_start": float(timeline["speech_start"]),
         "speech_end": float(timeline["speech_end"]),
-        "scene_count": len(scenes),
-        "scenes": scenes,
+        "scene_count": len(enriched),
+        "scenes": enriched,
     }
 
 
-def compact_word_map(timeline: dict) -> str:
+def fixed_scene_prompt(scenes: list[dict]) -> str:
     return "\n".join(
-        f"{w['index']}: {w['word']} [{float(w['start']):.2f}-{float(w['end']):.2f}]"
-        for w in timeline["words"]
+        f"Scene {s['scene_id']} | FIXED words {s['start_word']}-{s['end_word']} | "
+        f"{s['start']:.2f}-{s['end']:.2f}s | narration: {s['narration']}"
+        for s in scenes
     )
 
 
-def build_prompt(timeline: dict) -> str:
-    return f"""You are a storyboard planner for a ~30-second vertical AI/tech news Short.
+def build_prompt(fixed_scenes: list[dict]) -> str:
+    return f"""You are the semantic storyboard planner for a vertical AI/tech news Short.
+Python has already fixed valid scene boundaries. YOU MUST NOT change, split, merge, or
+renumber them. Add semantic metadata only.
 
-Divide the EXACT narration into 8-12 semantic visual scenes using contiguous word-index
-ranges. Prefer 8-10 scenes unless the narration clearly needs more. Python derives all
-real timestamps from the selected word indexes; never invent timestamps.
+FIXED SCENES:
+{fixed_scene_prompt(fixed_scenes)}
 
-Narration:
-{timeline['text']}
-
-Authoritative word map (index: token [start-end seconds]):
-{compact_word_map(timeline)}
-
-Hard rules:
-- First start_word = 0; each next start_word = previous end_word + 1.
-- Final end_word = {len(timeline['words']) - 1}; every word appears exactly once.
-- EVERY scene must be 1.2-6.0 seconds by the word-map timestamps; target 2-4 seconds.
-- Before returning JSON, calculate every proposed scene duration from the word map.
-- NEVER create a micro-scene under 1.2 seconds. If a short payoff/question/fragment
-  would be under 1.2 seconds, MERGE it into the previous or next semantic scene.
-- Put boundaries at real semantic changes: hook, fact/source, actor/company, claim,
-  counterargument, evidence/context, consequence, payoff.
-- visual_intent must name a concrete visible subject/action/location, never generic AI.
-- Give 2-4 concise Pexels-friendly search queries, specific first then broader fallback.
+For every scene:
+- scene_id must match exactly.
+- purpose: one of {', '.join(sorted(ALLOWED_PURPOSES))}.
+- visual_intent: a concrete visible subject/action/location matching that scene's narration.
+  Never use generic 'AI' or vague abstract filler when a concrete subject is possible.
+- search_queries: 2-4 concise Pexels-friendly queries, specific first then broader fallback.
 - preferred_asset_type: video, image, either, or source_card.
-- source_card only when narration explicitly discusses the source/article.
-- purpose must be one of: {', '.join(sorted(ALLOWED_PURPOSES))}.
+- Use source_card only if the scene explicitly refers to the source/article/news report.
 
-Return ONLY JSON:
-{{"scenes":[{{"start_word":0,"end_word":7,"purpose":"hook",
-"visual_intent":"specific visible subject and action",
-"search_queries":["specific query","broader fallback"],
-"preferred_asset_type":"video"}}]}}
+Return ONLY JSON. Do not include timing or word-index fields:
+{{"scenes":[{{"scene_id":1,"purpose":"hook","visual_intent":"...",
+"search_queries":["...","..."],"preferred_asset_type":"video"}}]}}
 """
 
 
-def build_repair_prompt(timeline: dict, prior_text: str, error: str) -> str:
-    return f"""The storyboard below failed a strict validator. You have exactly ONE
-semantic repair attempt. Return a COMPLETE corrected JSON object only.
+def build_repair_prompt(fixed_scenes: list[dict], prior: str, error: str) -> str:
+    return f"""Your semantic storyboard metadata failed validation. You have exactly ONE repair.
+Do not change the fixed number/order of scenes. Return complete corrected JSON only.
 
-VALIDATION ERROR:
-{error}
-
+ERROR: {error}
 PREVIOUS RESPONSE:
-{prior_text}
+{prior}
 
-Repair strategy is mandatory:
-1. Keep complete contiguous coverage of all word indexes.
-2. If the error is an undersized (<1.2s) scene, MERGE that whole short semantic beat
-   with an adjacent scene and reduce scene_count if needed. Do NOT merely shift the
-   too-short range so that a different scene becomes too short.
-3. Recalculate every scene duration from the authoritative word-map timestamps before
-   returning. Every scene must be 1.2-6.0s and total scene count must stay 8-12.
-4. Preserve concrete visual intent and 2-4 unique search queries for every resulting scene.
-
-FULL CONTRACT:
-{build_prompt(timeline)}
+CONTRACT:
+{build_prompt(fixed_scenes)}
 """
 
 
@@ -252,13 +280,12 @@ def call_gemini(client, prompt: str, max_attempts: int = 4):
             return client.models.generate_content(model=MODEL, contents=prompt)
         except genai_errors.ServerError as exc:
             last_error = exc
-            print(f"⚠️  Gemini server error ({attempt}/{max_attempts}): {exc}")
         except genai_errors.ClientError as exc:
             if getattr(exc, "code", None) != 429:
                 raise
             last_error = exc
-            print(f"⚠️  Gemini rate limited ({attempt}/{max_attempts}): {exc}")
         if attempt < max_attempts:
+            print(f"⚠️ Gemini transport retry {attempt}/{max_attempts}: {last_error}")
             time.sleep(delay)
             delay *= 2
     raise SystemExit(f"Gemini transport failed after {max_attempts} attempts: {last_error}")
@@ -271,37 +298,40 @@ def write_attempts(source_timeline: str, attempts: list[dict]) -> Path:
     return path
 
 
-def generate_valid_storyboard(timeline: dict, source_timeline: str) -> tuple[dict, bool]:
+def generate_storyboard(timeline: dict, source_timeline: str) -> tuple[dict, bool]:
     if not API_KEY:
         raise SystemExit("GEMINI_API_KEY is not set.")
+    fixed_scenes = deterministic_partition(timeline)
+    print(f"   Deterministic timing partition: {len(fixed_scenes)} valid scenes")
+    for s in fixed_scenes:
+        print(f"   T{s['scene_id']:02d} {s['start']:.2f}-{s['end']:.2f}s words {s['start_word']}-{s['end_word']}")
+
     client = genai.Client(api_key=API_KEY)
     attempts: list[dict] = []
-
-    first = call_gemini(client, build_prompt(timeline))
+    first = call_gemini(client, build_prompt(fixed_scenes))
     first_text = first.text or ""
     try:
-        result = materialize_and_validate(extract_json(first_text), timeline, source_timeline)
+        result = enrich_and_validate(extract_json(first_text), fixed_scenes, timeline, source_timeline)
         attempts.append({"attempt": 1, "status": "accepted", "response": first_text})
         write_attempts(source_timeline, attempts)
         return result, False
     except (json.JSONDecodeError, StoryboardValidationError, KeyError, TypeError, ValueError) as exc:
         error = str(exc)
         attempts.append({"attempt": 1, "status": "rejected", "error": error, "response": first_text})
-        print(f"⚠️  Initial storyboard rejected: {error}")
-        print("   Attempting one semantic repair pass...")
+        print(f"⚠️ Initial semantic metadata rejected: {error}")
 
-    repaired = call_gemini(client, build_repair_prompt(timeline, first_text, error))
+    repaired = call_gemini(client, build_repair_prompt(fixed_scenes, first_text, error))
     repaired_text = repaired.text or ""
     try:
-        result = materialize_and_validate(extract_json(repaired_text), timeline, source_timeline)
+        result = enrich_and_validate(extract_json(repaired_text), fixed_scenes, timeline, source_timeline)
         attempts.append({"attempt": 2, "status": "accepted", "response": repaired_text})
         write_attempts(source_timeline, attempts)
         return result, True
     except (json.JSONDecodeError, StoryboardValidationError, KeyError, TypeError, ValueError) as exc:
-        repair_error = str(exc)
-        attempts.append({"attempt": 2, "status": "rejected", "error": repair_error, "response": repaired_text})
+        error2 = str(exc)
+        attempts.append({"attempt": 2, "status": "rejected", "error": error2, "response": repaired_text})
         write_attempts(source_timeline, attempts)
-        raise SystemExit("Storyboard failed closed after one repair pass: " + repair_error) from exc
+        raise SystemExit("Storyboard failed closed after one semantic repair: " + error2) from exc
 
 
 def main() -> None:
@@ -309,21 +339,13 @@ def main() -> None:
     timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
     timestamp = timeline_path.stem.replace("narration_timeline_", "")
     out = OUTPUT_DIR / f"storyboard_{timestamp}.json"
-
-    print(f"🎞️  Planning semantic storyboard from {timeline_path.name}...")
-    storyboard, repaired = generate_valid_storyboard(timeline, timeline_path.name)
+    print(f"🎞️ Planning storyboard from {timeline_path.name}...")
+    storyboard, repaired = generate_storyboard(timeline, timeline_path.name)
     out.write_text(json.dumps(storyboard, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"✅ Storyboard saved: {out}")
-    print(
-        f"   Scenes: {storyboard['scene_count']} | speech: "
-        f"{storyboard['speech_start']:.2f}-{storyboard['speech_end']:.2f}s | "
-        f"semantic repair used: {'yes' if repaired else 'no'}"
-    )
-    for scene in storyboard["scenes"]:
-        print(
-            f"   S{scene['scene_id']:02d} {scene['start']:.2f}-{scene['end']:.2f}s "
-            f"[{scene['purpose']}] {scene['visual_intent']}"
-        )
+    print(f"   Scenes: {storyboard['scene_count']} | semantic repair used: {'yes' if repaired else 'no'}")
+    for s in storyboard["scenes"]:
+        print(f"   S{s['scene_id']:02d} {s['start']:.2f}-{s['end']:.2f}s [{s['purpose']}] {s['visual_intent']}")
 
 
 if __name__ == "__main__":
