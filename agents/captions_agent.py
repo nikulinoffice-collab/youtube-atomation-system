@@ -1,53 +1,28 @@
 """
-Step 4: Captions Agent
+Step 4: Caption Composer
 ------------------------
-Transcribes the narration audio (from voice_agent.py) using Whisper
-(OpenAI, free, runs locally — no API key, no per-use cost) and writes
-short-form burn-in captions (2-4 words per line, timed to the words) as
-both a .srt file and a raw word-timing .json for Step 5.
-
-Requires ffmpeg installed on your system (Whisper uses it internally):
-    Windows: choco install ffmpeg   (or download from ffmpeg.org and add to PATH)
-    Mac:     brew install ffmpeg
-    Linux:   sudo apt install ffmpeg
-
-Run:
-    python agents/captions_agent.py
+Builds readable SRT captions directly from the authoritative Edge-TTS
+narration timeline. There is no speech-to-text step: captions use the same
+words and timings that produced the voice audio.
 """
 
 import json
-import shutil
 from pathlib import Path
 
-import whisper
-
 OUTPUT_DIR = Path(__file__).parent / "output"
-
-# "tiny" and "base" are fast enough to run on CPU in a few seconds for a
-# 30s clip. Bump to "small" if accuracy on tricky tech terms is an issue.
-MODEL_SIZE = "base"
-
-# How many words per caption line — short-form captions read best at 2-4.
-WORDS_PER_CAPTION = 3
+MIN_WORDS = 2
+MAX_WORDS = 6
+MAX_CHARS = 42
+PAUSE_BREAK_SECONDS = 0.45
 
 
-def find_latest_voice() -> Path:
-    files = sorted(OUTPUT_DIR.glob("voice_*.mp3"))
+def find_latest_timeline() -> Path:
+    files = sorted(OUTPUT_DIR.glob("narration_timeline_*.json"))
     if not files:
         raise SystemExit(
-            "No voice_*.mp3 files found in agents/output/. Run voice_agent.py first."
+            "No narration_timeline_*.json found in agents/output/. Run voice_agent.py first."
         )
     return files[-1]
-
-
-def check_ffmpeg():
-    if shutil.which("ffmpeg") is None:
-        raise SystemExit(
-            "ffmpeg not found on your system PATH. Whisper needs it.\n"
-            "Windows: choco install ffmpeg  (or download from ffmpeg.org and add to PATH)\n"
-            "Mac:     brew install ffmpeg\n"
-            "Linux:   sudo apt install ffmpeg"
-        )
 
 
 def format_srt_timestamp(seconds: float) -> str:
@@ -58,62 +33,123 @@ def format_srt_timestamp(seconds: float) -> str:
     return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
 
 
-def group_words_into_lines(words: list[dict], per_line: int) -> list[dict]:
-    lines = []
-    for i in range(0, len(words), per_line):
-        chunk = words[i : i + per_line]
-        lines.append(
+def should_break(chunk: list[dict], next_word: dict | None) -> bool:
+    if not chunk:
+        return False
+    if len(chunk) >= MAX_WORDS:
+        return True
+    if next_word is None:
+        return True
+    if len(chunk) < MIN_WORDS:
+        return False
+
+    text = " ".join(w["word"].strip() for w in chunk)
+    if len(text) >= MAX_CHARS:
+        return True
+    gap = float(next_word["start"]) - float(chunk[-1]["end"])
+    return gap >= PAUSE_BREAK_SECONDS
+
+
+def compose_cues(words: list[dict]) -> list[dict]:
+    cues: list[dict] = []
+    chunk: list[dict] = []
+
+    for index, word in enumerate(words):
+        chunk.append(word)
+        next_word = words[index + 1] if index + 1 < len(words) else None
+        if should_break(chunk, next_word):
+            cues.append(
+                {
+                    "text": " ".join(w["word"].strip() for w in chunk),
+                    "start": float(chunk[0]["start"]),
+                    "end": float(chunk[-1]["end"]),
+                    "word_start_index": int(chunk[0]["index"]),
+                    "word_end_index": int(chunk[-1]["index"]),
+                }
+            )
+            chunk = []
+
+    if chunk:
+        cues.append(
             {
-                "text": "".join(w["word"] for w in chunk).strip(),
-                "start": chunk[0]["start"],
-                "end": chunk[-1]["end"],
+                "text": " ".join(w["word"].strip() for w in chunk),
+                "start": float(chunk[0]["start"]),
+                "end": float(chunk[-1]["end"]),
+                "word_start_index": int(chunk[0]["index"]),
+                "word_end_index": int(chunk[-1]["index"]),
             }
         )
-    return lines
+    return cues
 
 
-def write_srt(lines: list[dict], out_path: Path) -> None:
+def wrap_two_lines(text: str) -> str:
+    """Balance long cues over at most two lines without changing words."""
+    if len(text) <= 24:
+        return text
+    words = text.split()
+    if len(words) <= 2:
+        return text
+
+    best_index = min(
+        range(1, len(words)),
+        key=lambda i: abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))),
+    )
+    return " ".join(words[:best_index]) + "\n" + " ".join(words[best_index:])
+
+
+def validate_cues(cues: list[dict], words: list[dict], timeline_duration: float) -> None:
+    if not cues:
+        raise ValueError("Caption composer produced no cues.")
+
+    flattened = []
+    previous_end = 0.0
+    for cue in cues:
+        start = float(cue["start"])
+        end = float(cue["end"])
+        if start < previous_end - 1e-6:
+            raise ValueError("Caption cues overlap.")
+        if end <= start:
+            raise ValueError("Caption cue has non-positive duration.")
+        if end > timeline_duration + 0.02:
+            raise ValueError("Caption cue extends beyond narration timeline.")
+        flattened.extend(range(cue["word_start_index"], cue["word_end_index"] + 1))
+        previous_end = end
+
+    if flattened != list(range(len(words))):
+        raise ValueError("Caption cues do not cover every narration word exactly once.")
+
+
+def write_srt(cues: list[dict], out_path: Path) -> None:
     blocks = []
-    for idx, line in enumerate(lines, start=1):
+    for idx, cue in enumerate(cues, start=1):
         blocks.append(
             f"{idx}\n"
-            f"{format_srt_timestamp(line['start'])} --> {format_srt_timestamp(line['end'])}\n"
-            f"{line['text']}\n"
+            f"{format_srt_timestamp(cue['start'])} --> {format_srt_timestamp(cue['end'])}\n"
+            f"{wrap_two_lines(cue['text'])}\n"
         )
     out_path.write_text("\n".join(blocks), encoding="utf-8")
 
 
 def main():
-    check_ffmpeg()
+    timeline_path = find_latest_timeline()
+    timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+    words = timeline.get("words", [])
+    duration = float(timeline.get("duration", 0))
+    if not words or duration <= 0:
+        raise SystemExit("Narration timeline is empty or invalid.")
 
-    voice_path = find_latest_voice()
-    timestamp = voice_path.stem.replace("voice_", "")
-
-    print(f"🎧 Transcribing: {voice_path.name}  (model: {MODEL_SIZE})")
-    model = whisper.load_model(MODEL_SIZE)
-    result = model.transcribe(str(voice_path), word_timestamps=True, language="en")
-
-    # Flatten word-level timestamps across all segments.
-    words = []
-    for segment in result["segments"]:
-        for w in segment.get("words", []):
-            words.append({"word": w["word"], "start": w["start"], "end": w["end"]})
-
-    if not words:
-        raise SystemExit("Whisper returned no word-level timestamps — try a different model size.")
-
-    lines = group_words_into_lines(words, WORDS_PER_CAPTION)
+    timestamp = timeline_path.stem.replace("narration_timeline_", "")
+    cues = compose_cues(words)
+    validate_cues(cues, words, duration)
 
     srt_path = OUTPUT_DIR / f"captions_{timestamp}.srt"
-    write_srt(lines, srt_path)
+    cues_path = OUTPUT_DIR / f"caption_cues_{timestamp}.json"
+    write_srt(cues, srt_path)
+    cues_path.write_text(json.dumps(cues, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    words_json_path = OUTPUT_DIR / f"words_{timestamp}.json"
-    words_json_path.write_text(json.dumps(words, indent=2, ensure_ascii=False))
-
-    full_text_check = " ".join(w["word"].strip() for w in words)
-    print(f"\n✅ Captions saved: {srt_path}")
-    print(f"✅ Word timings saved: {words_json_path}")
-    print(f"\nTranscribed text (sanity check against the script):\n{full_text_check}")
+    print(f"✅ Captions saved: {srt_path}")
+    print(f"✅ Caption cue manifest saved: {cues_path}")
+    print(f"   {len(words)} authoritative words grouped into {len(cues)} cues")
 
 
 if __name__ == "__main__":
