@@ -1,0 +1,44 @@
+name: M5.4 Renderer Smoke One Shot
+
+on:
+  push:
+    branches:
+      - factory-v1-storyboard
+    paths:
+      - '.github/workflows/m54-smoke-one-shot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -r requirements.txt
+      - run: playwright install --with-deps chromium
+      - name: Compile M5.4 renderer smoke
+        run: python -m py_compile agents/video_agent.py agents/m54_smoke.py
+      - name: Exercise every still motion and Source Card
+        working-directory: agents
+        run: python m54_smoke.py
+      - name: Verify smoke report
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('agents/output/m54_smoke_report.json')
+          d = json.loads(p.read_text())
+          assert d['status'] == 'PASS'
+          assert set(d['tested_still_motions']) == {'static','slow_push_in','slow_pull_out','pan_left','pan_right'}
+          assert d['source_card_resolution'] == '1080x1920'
+          assert d['source_card_caption_safe_bottom_px'] == 520
+          assert d['network_calls'] == 0
+          print('M5.4 deterministic smoke PASS')
+          PY
