@@ -2,9 +2,6 @@ name: Factory V1 - Generate Draft Short
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - factory-v1-storyboard
 
 concurrency:
   group: factory-v1-${{ github.repository }}
@@ -21,20 +18,35 @@ jobs:
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
+
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Install Python dependencies
         run: pip install -r requirements.txt
+
       - name: Install Playwright browser
         run: playwright install --with-deps chromium
+
       - name: Compile production agents
         run: |
-          python -m py_compile agents/script_agent.py agents/voice_agent.py agents/captions_agent.py agents/storyboard_agent.py agents/visuals_agent.py agents/visual_ranker.py agents/visuals_m53_agent.py agents/video_agent.py agents/qc_agent.py
+          python -m py_compile \
+            agents/script_agent.py \
+            agents/voice_agent.py \
+            agents/captions_agent.py \
+            agents/storyboard_agent.py \
+            agents/visuals_agent.py \
+            agents/visual_ranker.py \
+            agents/visuals_m53_agent.py \
+            agents/video_agent.py \
+            agents/qc_agent.py
+
       - name: Validate required free-tier API secrets
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -42,6 +54,7 @@ jobs:
         run: |
           if [ -z "$GEMINI_API_KEY" ]; then echo "Missing required repository secret: GEMINI_API_KEY"; exit 1; fi
           if [ -z "$PEXELS_API_KEY" ]; then echo "Missing required repository secret: PEXELS_API_KEY"; exit 1; fi
+
       - name: Generate and QC draft video
         working-directory: agents
         env:
@@ -55,81 +68,234 @@ jobs:
           python visuals_m53_agent.py
           python video_agent.py
           python qc_agent.py
+
       - name: Verify M5.1 visual direction contract
         run: |
           shopt -s nullglob
-          storyboards=(agents/output/storyboard_[0-9]*.json); test ${#storyboards[@]} -gt 0
+          storyboards=(agents/output/storyboard_[0-9]*.json)
+          test ${#storyboards[@]} -gt 0
           python - "${storyboards[-1]}" <<'PY'
-          import json,sys
+          import json, sys
           from pathlib import Path
-          d=json.loads(Path(sys.argv[1]).read_text()); scenes=d.get('scenes',[])
-          assert d.get('schema_version')==3 and d.get('visual_direction_contract')=='m5.1'
-          assert 8<=len(scenes)<=12
-          for s in scenes:
-              assert s.get('visual_goal') and 2<=len(s.get('must_show',[]))<=5 and 1<=len(s.get('avoid',[]))<=5
-              assert s.get('subject') and s.get('action') and s.get('environment')
-              assert 3<=len(s.get('query_strategies',[]))<=5
+          data = json.loads(Path(sys.argv[1]).read_text())
+          scenes = data.get("scenes", [])
+          assert data.get("schema_version") == 3
+          assert data.get("timing_strategy") == "deterministic_dp"
+          assert data.get("visual_direction_contract") == "m5.1"
+          assert 8 <= len(scenes) <= 12
+          assert data.get("scene_count") == len(scenes)
+          assert scenes[0]["start_word"] == 0
+          allowed_specificity = {"low", "medium", "high"}
+          allowed_motion = {"static", "slow_push_in", "slow_pull_out", "pan_left", "pan_right"}
+          allowed_shots = {"close_up", "medium", "wide", "over_shoulder", "screen_detail", "portrait", "environment", "source_card"}
+          allowed_strategies = {"direct_subject", "action_driven", "environment_driven", "cinematic", "fallback"}
+          for scene in scenes:
+              assert 1.2 - 1e-6 <= float(scene["duration"]) <= 6.0 + 1e-6
+              assert scene.get("visual_goal") and len(scene["visual_goal"]) >= 20
+              assert 2 <= len(scene.get("must_show", [])) <= 5
+              assert 1 <= len(scene.get("avoid", [])) <= 5
+              assert scene.get("subject") and scene.get("action") and scene.get("environment")
+              assert scene.get("specificity_required") in allowed_specificity
+              assert scene.get("preferred_motion") in allowed_motion
+              assert scene.get("shot_type") in allowed_shots
+              strategies = scene.get("query_strategies", [])
+              assert 3 <= len(strategies) <= 5
+              kinds = [item["strategy"] for item in strategies]
+              queries = [item["query"] for item in strategies]
+              assert len(kinds) == len(set(kinds))
+              assert set(kinds) <= allowed_strategies
+              assert kinds.count("fallback") == 1
+              assert len(set(kinds) - {"fallback"}) >= 2
+              assert len({q.casefold() for q in queries}) == len(queries)
+              assert scene.get("search_queries") == queries
+              assert scene.get("visual_intent")
+          for left, right in zip(scenes, scenes[1:]):
+              assert right["start_word"] == left["end_word"] + 1
+              assert right["start"] >= left["end"] - 1e-6
           print(f"M5.1 PASS: scenes={len(scenes)}")
           PY
+
       - name: Verify M5.2 retrieval invariants inside ranked manifest
         run: |
           shopt -s nullglob
-          candidates=(agents/output/candidate_manifest_[0-9]*.json); storyboards=(agents/output/storyboard_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
+          test ${#candidates[@]} -gt 0
+          test ${#storyboards[@]} -gt 0
           python - "${candidates[-1]}" "${storyboards[-1]}" <<'PY'
-          import json,sys
+          import json, sys
           from pathlib import Path
-          m=json.loads(Path(sys.argv[1]).read_text()); s=json.loads(Path(sys.argv[2]).read_text())
-          assert m['scene_count']==len(s['scenes'])==len(m['scenes'])
-          p=m['retrieval_policy']; assert p['video_duration_must_cover_scene'] is True and p['minimum_portrait_width']>=540 and p['minimum_portrait_height']>=960
-          total=eligible=0
-          for scene,pool in zip(s['scenes'],m['scenes']):
-              assert pool['scene_id']==scene['scene_id'] and 3<=len(pool['query_strategies'])<=5
-              ids=[str(c['asset_id']) for c in pool['candidates']]; assert ids and len(ids)==len(set(ids))
-              ok=[c for c in pool['candidates'] if c.get('technical_status')=='eligible']; assert ok
-              total+=len(ids); eligible+=len(ok)
-          assert total>len(s['scenes']); print(f"M5.2 retrieval PASS: candidates={total}, eligible={eligible}")
+          manifest = json.loads(Path(sys.argv[1]).read_text())
+          storyboard = json.loads(Path(sys.argv[2]).read_text())
+          scenes = storyboard.get("scenes", [])
+          pools = manifest.get("scenes", [])
+          assert manifest.get("scene_count") == len(scenes) == len(pools)
+          policy = manifest.get("retrieval_policy", {})
+          assert policy.get("semantic_ranking") is True
+          assert policy.get("video_duration_must_cover_scene") is True
+          assert int(policy.get("minimum_portrait_width", 0)) >= 540
+          assert int(policy.get("minimum_portrait_height", 0)) >= 960
+          total_candidates = total_eligible = 0
+          for scene, pool in zip(scenes, pools):
+              assert pool["scene_id"] == scene["scene_id"]
+              strategies = pool.get("query_strategies", [])
+              assert 3 <= len(strategies) <= 5
+              assert [item["query"] for item in strategies] == scene["search_queries"]
+              retrieved = pool.get("candidates", [])
+              assert retrieved
+              ids = [str(item["asset_id"]) for item in retrieved]
+              assert len(ids) == len(set(ids))
+              eligible = [item for item in retrieved if item.get("technical_status") == "eligible"]
+              assert eligible
+              for item in retrieved:
+                  assert item.get("technical_status") in {"eligible", "rejected"}
+                  assert str(item.get("source_url", "")).strip()
+                  assert item.get("type") in {"video", "image"}
+                  if item.get("technical_status") == "eligible" and item.get("provider") == "pexels":
+                      assert int(item.get("download_width") or 0) >= 540
+                      assert int(item.get("download_height") or 0) >= 960
+                      assert int(item.get("download_height") or 0) > int(item.get("download_width") or 0)
+                      if item.get("type") == "video":
+                          assert float(item.get("provider_duration") or 0) + 1e-6 >= float(scene["duration"])
+              total_candidates += len(retrieved)
+              total_eligible += len(eligible)
+          assert total_candidates > len(scenes)
+          print(f"M5.2 retrieval PASS: scenes={len(scenes)}, candidates={total_candidates}, eligible={total_eligible}")
           PY
+
       - name: Verify M5.3 ranking and diversity contract
         run: |
           shopt -s nullglob
-          candidates=(agents/output/candidate_manifest_[0-9]*.json); manifests=(agents/output/asset_manifest_[0-9]*.json); storyboards=(agents/output/storyboard_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
+          manifests=(agents/output/asset_manifest_[0-9]*.json)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
           python - "${candidates[-1]}" "${manifests[-1]}" "${storyboards[-1]}" <<'PY'
-          import json,sys
+          import json, sys
           from pathlib import Path
-          r=json.loads(Path(sys.argv[1]).read_text()); a=json.loads(Path(sys.argv[2]).read_text()); s=json.loads(Path(sys.argv[3]).read_text())
-          assert r.get('schema_version')==2 and r.get('milestone')=='M5.3'
-          p=r['ranking_policy']; assert p['query_semantic_contribution_is_capped'] is True and p['candidate_specific_semantics']=='provider URL slug and creator metadata'
-          assert p['generic_penalty'] and p['duplicate_penalty'] and p['global_diversity_penalty'] and p['image_content_claims'] is False
-          assert a.get('schema_version')==3 and a.get('acquisition_strategy')=='semantic_ranked_with_global_diversity_penalties'
-          seen=set(); cats=[]
-          for scene,pool,asset in zip(s['scenes'],r['scenes'],a['assets']):
-              ranked=pool['ranked_candidates']; assert ranked
-              scores=[float(c['ranking']['final_score']) for c in ranked]; assert scores==sorted(scores,reverse=True)
-              assert [int(c['ranking']['rank']) for c in ranked]==list(range(1,len(ranked)+1))
-              for c in ranked:
-                  q=c['ranking']; assert 0<=float(q['technical_score'])<=36 and 0<=float(q['semantic_score'])<=58 and float(q['penalty_total'])>=0 and q['reasons']
-              sel=asset['selection']; assert sel['reasons'] and asset['asset_id'] not in seen; seen.add(asset['asset_id']); cats.append(sel['visual_category'])
-              if asset['provider']=='pexels':
-                  match=[c for c in ranked if c['asset_id']==asset['asset_id']]; assert match and int(sel['rank'])==int(match[0]['ranking']['rank'])
-          maxrun=run=1
-          for x,y in zip(cats,cats[1:]): run=run+1 if x==y else 1; maxrun=max(maxrun,run)
-          assert maxrun<=2
-          print(f"M5.3 PASS: scenes={len(cats)}, categories={cats}, max_same_category_run={maxrun}")
+          ranked = json.loads(Path(sys.argv[1]).read_text())
+          assets = json.loads(Path(sys.argv[2]).read_text())
+          storyboard = json.loads(Path(sys.argv[3]).read_text())
+          assert ranked.get("schema_version") == 2
+          assert ranked.get("milestone") == "M5.3"
+          policy = ranked.get("ranking_policy", {})
+          assert policy.get("query_semantic_contribution_is_capped") is True
+          assert policy.get("candidate_specific_semantics") == "provider URL slug and creator metadata"
+          assert policy.get("generic_penalty") is True
+          assert policy.get("avoid_penalty") is True
+          assert policy.get("duplicate_penalty") is True
+          assert policy.get("creator_reuse_penalty") is True
+          assert policy.get("global_diversity_penalty") is True
+          assert policy.get("image_content_claims") is False
+          assert assets.get("schema_version") == 3
+          assert assets.get("acquisition_strategy") == "semantic_ranked_with_global_diversity_penalties"
+          assert len(assets["assets"]) == len(storyboard["scenes"])
+          seen = set(); categories = []
+          for scene, pool, asset in zip(storyboard["scenes"], ranked["scenes"], assets["assets"]):
+              ranked_candidates = pool.get("ranked_candidates", [])
+              assert ranked_candidates
+              scores = [float(c["ranking"]["final_score"]) for c in ranked_candidates]
+              assert scores == sorted(scores, reverse=True)
+              assert [int(c["ranking"]["rank"]) for c in ranked_candidates] == list(range(1, len(ranked_candidates)+1))
+              for c in ranked_candidates:
+                  r = c["ranking"]
+                  assert 0 <= float(r["technical_score"]) <= 36
+                  assert 0 <= float(r["semantic_score"]) <= 58
+                  assert float(r["penalty_total"]) >= 0
+                  assert r.get("visual_category")
+                  assert r.get("reasons")
+              selection = asset.get("selection", {})
+              assert selection.get("reasons")
+              assert asset["asset_id"] not in seen
+              seen.add(asset["asset_id"])
+              categories.append(selection.get("visual_category"))
+              if asset["provider"] == "pexels":
+                  match = [c for c in ranked_candidates if c["asset_id"] == asset["asset_id"]]
+                  assert match
+                  assert int(selection["rank"]) == int(match[0]["ranking"]["rank"])
+          max_run = run = 1
+          for a, b in zip(categories, categories[1:]):
+              run = run + 1 if a == b else 1
+              max_run = max(max_run, run)
+          assert max_run <= 2
+          print(f"M5.3 PASS: scenes={len(categories)}, categories={categories}, max_same_category_run={max_run}")
           PY
+
+      - name: Verify semantic asset manifest compatibility
+        run: |
+          shopt -s nullglob
+          manifests=(agents/output/asset_manifest_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
+          test ${#manifests[@]} -gt 0
+          test ${#candidates[@]} -gt 0
+          python - "${manifests[-1]}" "${storyboards[-1]}" "${candidates[-1]}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          manifest = json.loads(Path(sys.argv[1]).read_text())
+          storyboard = json.loads(Path(sys.argv[2]).read_text())
+          candidate_manifest = json.loads(Path(sys.argv[3]).read_text())
+          assets, scenes = manifest.get("assets", []), storyboard.get("scenes", [])
+          assert manifest.get("schema_version") == 3
+          assert manifest.get("scene_count") == len(scenes) == len(assets)
+          assert manifest.get("source_candidate_manifest") == Path(sys.argv[3]).name
+          assert manifest.get("acquisition_strategy") == "semantic_ranked_with_global_diversity_penalties"
+          seen = set()
+          for scene, pool, asset in zip(scenes, candidate_manifest["scenes"], assets):
+              assert asset["scene_id"] == scene["scene_id"] == pool["scene_id"]
+              assert abs(float(asset["scene_start"]) - float(scene["start"])) < 1e-6
+              assert abs(float(asset["scene_end"]) - float(scene["end"])) < 1e-6
+              assert asset["type"] in {"video", "image"}
+              assert asset["provider"] in {"pexels", "source_article"}
+              assert asset["asset_id"] not in seen
+              seen.add(asset["asset_id"])
+              assert str(asset["source_url"]).strip()
+              assert Path(asset["path"]).exists()
+              assert asset.get("selection", {}).get("reasons")
+          print(f"Asset compatibility PASS: assets={len(assets)}")
+          PY
+
       - name: Verify M4 renderer and QC package
         run: |
           shopt -s nullglob
-          qcs=(agents/output/qc_report_[0-9]*.json); renderers=(agents/output/renderer_manifest_[0-9]*.json); videos=(agents/output/final_[0-9]*.mp4)
+          qcs=(agents/output/qc_report_[0-9]*.json)
+          renderers=(agents/output/renderer_manifest_[0-9]*.json)
+          timelines=(agents/output/narration_timeline_[0-9]*.json)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
+          manifests=(agents/output/asset_manifest_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
+          voices=(agents/output/voice_[0-9]*.mp3)
+          captions=(agents/output/captions_[0-9]*.srt)
+          videos=(agents/output/final_[0-9]*.mp4)
+          for arr in qcs renderers timelines storyboards manifests candidates voices captions videos; do
+            eval "count=\${#$arr[@]}"
+            if [ "$count" -eq 0 ]; then echo "Missing required artifact class: $arr"; exit 1; fi
+          done
           python - "${qcs[-1]}" "${renderers[-1]}" <<'PY'
-          import json,sys
+          import json, sys
           from pathlib import Path
-          q=json.loads(Path(sys.argv[1]).read_text()); r=json.loads(Path(sys.argv[2]).read_text())
-          assert q.get('status')=='PASS' and r.get('strategy')=='storyboard_scene_start_cuts_with_previous_scene_pause_hold'
-          assert 8<=len(r.get('segments',[]))<=12
-          print(f"M4 PASS: scenes={len(r['segments'])}")
+          qc = json.loads(Path(sys.argv[1]).read_text())
+          renderer = json.loads(Path(sys.argv[2]).read_text())
+          assert qc.get("status") == "PASS"
+          assert renderer.get("strategy") == "storyboard_scene_start_cuts_with_previous_scene_pause_hold"
+          assert renderer.get("source_card_strategy") == "readable_mobile_card"
+          segments = renderer.get("segments", [])
+          assert 8 <= len(segments) <= 12
+          assert abs(float(segments[0]["render_start"])) < 0.06
+          for left, right in zip(segments, segments[1:]):
+              assert abs(float(left["render_end"]) - float(right["render_start"])) < 0.06
+          checks = qc.get("checks", {})
+          required = ["required_artifacts_present", "voice_matches_narration_timeline", "final_duration_matches_voice", "captions_within_narration", "scene_timing_preserved", "asset_provenance_preserved", "render_timeline_contiguous"]
+          assert all(checks.get(key) is True for key in required)
+          print(f"M4 PASS: scenes={len(segments)}, qc={Path(sys.argv[1]).name}")
           PY
+
+      - name: Verify final MP4 exists
+        run: |
+          shopt -s nullglob
+          videos=(agents/output/final_*.mp4)
           test ${#videos[@]} -gt 0
           ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 "${videos[-1]}"
+
       - name: Upload draft artifacts
         if: always()
         uses: actions/upload-artifact@v4
