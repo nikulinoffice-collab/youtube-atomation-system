@@ -1,9 +1,8 @@
 """
-Step 4: Caption Composer
+Step 3: Caption Composer
 ------------------------
 Builds readable SRT captions directly from the authoritative Edge-TTS
-narration timeline. There is no speech-to-text step: captions use the same
-canonical words and timings that produced the voice audio.
+narration timeline. There is no speech-to-text step.
 """
 
 import json
@@ -34,6 +33,16 @@ def format_srt_timestamp(seconds: float) -> str:
     return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
 
 
+def render_span(words: list[dict]) -> str:
+    if not words:
+        return ""
+    text = "".join(
+        str(word.get("separator_before", "")) + str(word["word"])
+        for word in words
+    )
+    return text.strip()
+
+
 def should_break(chunk: list[dict], next_word: dict | None) -> bool:
     if not chunk:
         return False
@@ -48,7 +57,7 @@ def should_break(chunk: list[dict], next_word: dict | None) -> bool:
     if len(chunk) < MIN_WORDS:
         return False
 
-    text = " ".join(w["word"].strip() for w in chunk)
+    text = render_span(chunk)
     if len(text) >= MAX_CHARS:
         return True
     gap = float(next_word["start"]) - float(chunk[-1]["end"])
@@ -65,7 +74,7 @@ def compose_cues(words: list[dict]) -> list[dict]:
         if should_break(chunk, next_word):
             cues.append(
                 {
-                    "text": " ".join(w["word"].strip() for w in chunk),
+                    "text": render_span(chunk),
                     "start": float(chunk[0]["start"]),
                     "end": float(chunk[-1]["end"]),
                     "word_start_index": int(chunk[0]["index"]),
@@ -77,7 +86,7 @@ def compose_cues(words: list[dict]) -> list[dict]:
     if chunk:
         cues.append(
             {
-                "text": " ".join(w["word"].strip() for w in chunk),
+                "text": render_span(chunk),
                 "start": float(chunk[0]["start"]),
                 "end": float(chunk[-1]["end"]),
                 "word_start_index": int(chunk[0]["index"]),
@@ -88,7 +97,6 @@ def compose_cues(words: list[dict]) -> list[dict]:
 
 
 def wrap_two_lines(text: str) -> str:
-    """Balance long cues over at most two lines without changing words."""
     if len(text) <= 24:
         return text
     words = text.split()
@@ -102,7 +110,9 @@ def wrap_two_lines(text: str) -> str:
     return " ".join(words[:best_index]) + "\n" + " ".join(words[best_index:])
 
 
-def validate_cues(cues: list[dict], words: list[dict], timeline_duration: float) -> None:
+def validate_cues(
+    cues: list[dict], words: list[dict], timeline_duration: float, canonical_text: str
+) -> None:
     if not cues:
         raise ValueError("Caption composer produced no cues.")
 
@@ -123,10 +133,12 @@ def validate_cues(cues: list[dict], words: list[dict], timeline_duration: float)
     if flattened != list(range(len(words))):
         raise ValueError("Caption cues do not cover every narration word exactly once.")
 
-    source_text = " ".join(word["word"] for word in words)
-    cue_text = " ".join(cue["text"] for cue in cues)
-    if cue_text != source_text:
-        raise ValueError("Caption text differs from canonical narration.")
+    reconstructed = "".join(
+        str(word.get("separator_before", "")) + str(word["word"])
+        for word in words
+    )
+    if reconstructed != canonical_text:
+        raise ValueError("Timeline lexical units do not reconstruct canonical narration.")
 
 
 def write_srt(cues: list[dict], out_path: Path) -> None:
@@ -145,12 +157,13 @@ def main():
     timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
     words = timeline.get("words", [])
     duration = float(timeline.get("duration", 0))
-    if not words or duration <= 0:
+    canonical_text = str(timeline.get("text", ""))
+    if not words or duration <= 0 or not canonical_text:
         raise SystemExit("Narration timeline is empty or invalid.")
 
     timestamp = timeline_path.stem.replace("narration_timeline_", "")
     cues = compose_cues(words)
-    validate_cues(cues, words, duration)
+    validate_cues(cues, words, duration, canonical_text)
 
     srt_path = OUTPUT_DIR / f"captions_{timestamp}.srt"
     cues_path = OUTPUT_DIR / f"caption_cues_{timestamp}.json"
