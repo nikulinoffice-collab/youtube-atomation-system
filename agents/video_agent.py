@@ -1,10 +1,12 @@
-"""M4 Storyboard-driven video renderer.
+"""M5.4 storyboard-driven renderer with controlled motion and mobile source cards.
 
 Consumes asset_manifest_<timestamp>.json as the canonical visual timeline.
 Visual cuts occur at storyboard scene starts rather than by equal division.
 Narration pauses explicitly hold the preceding scene visual until the next
-semantic scene begins. Source-article screenshots are rendered as readable
-mobile source cards at render time while retaining original provenance.
+semantic scene begins. Still-image motion follows the M5 visual-direction
+contract; video assets retain their native motion. Source-article screenshots
+are replaced at render time with concise caption-safe mobile source cards while
+retaining the original provenance in the renderer manifest.
 """
 
 import html
@@ -21,6 +23,7 @@ TARGET_HEIGHT = 1920
 TARGET_FPS = 30
 MUSIC_VOLUME = 0.12
 TIMING_EPSILON = 0.050
+ALLOWED_MOTIONS = {"static", "slow_push_in", "slow_pull_out", "pan_left", "pan_right"}
 SUBTITLE_STYLE = (
     "FontName=Arial,FontSize=16,Bold=1,PrimaryColour=&H00FFFFFF,"
     "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,"
@@ -86,33 +89,63 @@ def validate_asset_manifest(manifest: dict) -> list[dict]:
             raise SystemExit(f"Missing/empty scene asset: {path}")
         if asset.get("type") not in {"video", "image"}:
             raise SystemExit(f"Invalid asset type for scene {expected_id}.")
+        motion = str(asset.get("preferred_motion", "static"))
+        if motion not in ALLOWED_MOTIONS:
+            raise SystemExit(f"Invalid preferred_motion for scene {expected_id}: {motion!r}")
+        if asset.get("provider") == "source_article" and motion != "static":
+            raise SystemExit(f"Source-card scene {expected_id} must use static motion for readability.")
         previous_start = start
     return [dict(asset) for asset in assets]
 
 
+def compact_headline(text: str, limit: int = 116) -> str:
+    clean = " ".join(str(text).split())
+    if len(clean) <= limit:
+        return clean
+    shortened = clean[: limit + 1].rsplit(" ", 1)[0].rstrip(" ,.;:-")
+    return f"{shortened}…"
+
+
+def source_publisher(source_url: str) -> tuple[str, str]:
+    domain = urlparse(source_url).netloc.removeprefix("www.") or "source"
+    publisher = domain.split(".")[0].replace("-", " ").strip().upper() or "SOURCE"
+    return publisher, domain
+
+
 def render_source_card(script: dict, asset: dict, timestamp: str) -> Path:
-    """Create a legible 1080x1920 source card instead of a full-page screenshot."""
+    """Create a concise source card that leaves the subtitle-safe lower region clear."""
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise SystemExit("Playwright is required for source-card rendering.") from exc
 
-    headline = html.escape(str(script.get("source_title") or script.get("title") or "Source article"))
+    raw_headline = str(script.get("source_title") or script.get("title") or "Source article")
+    headline = html.escape(compact_headline(raw_headline))
     source_url = str(asset.get("source_url", ""))
-    domain = html.escape(urlparse(source_url).netloc.removeprefix("www.") or "SOURCE")
+    publisher_raw, domain_raw = source_publisher(source_url)
+    publisher = html.escape(publisher_raw)
+    domain = html.escape(domain_raw)
+    source_date_raw = str(script.get("source_date") or script.get("published_at") or "").strip()
+    source_date = html.escape(source_date_raw[:32])
     output_path = OUTPUT_DIR / f"source_card_{timestamp}_scene_{int(asset['scene_id']):02d}.jpg"
+    date_html = f'<div class="date">{source_date}</div>' if source_date else ""
     document = f"""<!doctype html><html><head><style>
-      *{{box-sizing:border-box}} body{{margin:0;width:1080px;height:1920px;background:#0d0f14;color:white;
-      font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:90px}}
-      .card{{width:900px;min-height:760px;background:#171b23;border:2px solid #394150;border-radius:42px;
-      padding:72px;display:flex;flex-direction:column;justify-content:center;box-shadow:0 20px 80px #0008}}
-      .label{{font-size:34px;letter-spacing:5px;color:#9ba7ba;font-weight:700;margin-bottom:42px}}
-      .headline{{font-size:68px;line-height:1.08;font-weight:800;margin-bottom:54px}}
-      .domain{{font-size:38px;color:#c9d3e2;font-weight:700}}
-      .note{{font-size:26px;color:#7f8a9d;margin-top:18px}}
-    </style></head><body><div class="card"><div class="label">SOURCE</div>
-    <div class="headline">{headline}</div><div class="domain">{domain}</div>
-    <div class="note">Referenced in this story</div></div></body></html>"""
+      *{{box-sizing:border-box}}
+      body{{margin:0;width:1080px;height:1920px;background:#0b0e13;color:white;font-family:Arial,sans-serif;
+      padding:150px 84px 0 84px;overflow:hidden}}
+      .card{{width:912px;max-height:1030px;background:#171c25;border:2px solid #3b4658;border-radius:40px;
+      padding:64px 64px 58px 64px;box-shadow:0 24px 90px #0009;overflow:hidden}}
+      .publisher{{font-size:34px;line-height:1;font-weight:800;letter-spacing:4px;color:#dce5f2;margin-bottom:40px}}
+      .headline{{font-size:58px;line-height:1.10;font-weight:800;display:-webkit-box;-webkit-line-clamp:7;
+      -webkit-box-orient:vertical;overflow:hidden;margin-bottom:44px}}
+      .meta{{border-top:2px solid #343d4b;padding-top:32px}}
+      .domain{{font-size:34px;line-height:1.2;color:#c6d2e2;font-weight:700}}
+      .date{{font-size:27px;line-height:1.2;color:#8694a8;margin-top:14px}}
+      .source-label{{font-size:25px;color:#718096;letter-spacing:3px;margin-top:24px}}
+      .caption-safe{{position:absolute;left:0;right:0;bottom:0;height:520px;border-top:1px solid #ffffff10}}
+    </style></head><body><div class="card"><div class="publisher">{publisher}</div>
+    <div class="headline">{headline}</div><div class="meta"><div class="domain">{domain}</div>{date_html}
+    <div class="source-label">SOURCE</div></div></div><div class="caption-safe"></div></body></html>"""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": TARGET_WIDTH, "height": TARGET_HEIGHT})
@@ -132,8 +165,9 @@ def prepare_render_assets(assets: list[dict], script: dict, timestamp: str) -> l
             card_path = render_source_card(script, item, timestamp)
             item["original_asset_path"] = item["path"]
             item["path"] = str(card_path)
-            item["render_transform"] = "readable_source_card"
+            item["render_transform"] = "concise_caption_safe_source_card"
             item["type"] = "image"
+            item["preferred_motion"] = "static"
         else:
             item["render_transform"] = "none"
         prepared.append(item)
@@ -152,10 +186,13 @@ def build_render_segments(assets: list[dict], total_duration: float) -> list[dic
             raise SystemExit(f"Non-positive render interval for scene {asset['scene_id']}.")
         if scene_start < render_start - TIMING_EPSILON or scene_end > render_end + TIMING_EPSILON:
             raise SystemExit(f"Semantic interval does not fit render interval for scene {asset['scene_id']}.")
+        preferred_motion = str(asset.get("preferred_motion", "static"))
+        resolved_motion = "native_video" if asset["type"] == "video" else preferred_motion
         segments.append({
             "scene_id": int(asset["scene_id"]), "asset_id": str(asset["asset_id"]),
             "asset_path": str(asset["path"]), "asset_type": str(asset["type"]),
             "provider": str(asset["provider"]), "render_transform": str(asset.get("render_transform", "none")),
+            "preferred_motion": preferred_motion, "resolved_motion": resolved_motion,
             "scene_start": scene_start, "scene_end": scene_end,
             "render_start": render_start, "render_end": render_end,
             "render_duration": render_end - render_start,
@@ -170,6 +207,30 @@ def build_render_segments(assets: list[dict], total_duration: float) -> list[dic
     return segments
 
 
+def still_motion_filter(index: int, duration: float, frames: int, motion: str) -> str:
+    prefix = f"[{index}:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:{TARGET_HEIGHT},scale={TARGET_WIDTH*2}:{TARGET_HEIGHT*2},"
+    center = "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+    if motion == "static":
+        return f"[{index}:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1,fps={TARGET_FPS},trim=0:{duration:.3f},setpts=PTS-STARTPTS[v{index}]"
+    if motion == "slow_push_in":
+        zoom = "z='min(zoom+0.0013,1.12)'"
+        position = center
+    elif motion == "slow_pull_out":
+        zoom = "z='if(eq(on,0),1.12,max(1.0,zoom-0.0013))'"
+        position = center
+    elif motion == "pan_left":
+        zoom = "z='1.08'"
+        denom = max(1, frames - 1)
+        position = f"x='(iw-iw/zoom)*(1-on/{denom})':y='ih/2-(ih/zoom/2)'"
+    elif motion == "pan_right":
+        zoom = "z='1.08'"
+        denom = max(1, frames - 1)
+        position = f"x='(iw-iw/zoom)*(on/{denom})':y='ih/2-(ih/zoom/2)'"
+    else:
+        raise SystemExit(f"Unsupported still motion: {motion}")
+    return f"{prefix}zoompan={zoom}:d={frames}:{position}:s={TARGET_WIDTH}x{TARGET_HEIGHT}:fps={TARGET_FPS},setsar=1,trim=0:{duration:.3f},setpts=PTS-STARTPTS[v{index}]"
+
+
 def build_visuals_segment(segments: list[dict], out_path: Path) -> None:
     inputs, filters = [], []
     for index, segment in enumerate(segments):
@@ -180,7 +241,7 @@ def build_visuals_segment(segments: list[dict], out_path: Path) -> None:
             filters.append(f"[{index}:v]trim=0:{duration:.3f},setpts=PTS-STARTPTS,scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:{TARGET_HEIGHT},setsar=1,fps={TARGET_FPS}[v{index}]")
         else:
             inputs += ["-loop", "1", "-i", path]
-            filters.append(f"[{index}:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:{TARGET_HEIGHT},scale={TARGET_WIDTH*2}:{TARGET_HEIGHT*2},zoompan=z='min(zoom+0.0015,1.16)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={TARGET_WIDTH}x{TARGET_HEIGHT}:fps={TARGET_FPS},setsar=1,trim=0:{duration:.3f},setpts=PTS-STARTPTS[v{index}]")
+            filters.append(still_motion_filter(index, duration, frames, str(segment["resolved_motion"])))
     filters.append("".join(f"[v{i}]" for i in range(len(segments))) + f"concat=n={len(segments)}:v=1:a=0[outv]")
     run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(filters), "-map", "[outv]", "-an", str(out_path)])
 
@@ -203,7 +264,7 @@ def main() -> None:
     renderer_manifest_path = OUTPUT_DIR / f"renderer_manifest_{timestamp}.json"
     for path in (voice_path, asset_manifest_path, captions_path):
         if not path.exists():
-            raise SystemExit(f"Missing {path.name}; M1-M3 must complete before M4 rendering.")
+            raise SystemExit(f"Missing {path.name}; M1-M3 must complete before M5.4 rendering.")
 
     script = json.loads(script_path.read_text(encoding="utf-8"))
     audio_duration = get_audio_duration(voice_path)
@@ -211,16 +272,21 @@ def main() -> None:
     original_assets = validate_asset_manifest(manifest)
     assets = prepare_render_assets(original_assets, script, timestamp)
     segments = build_render_segments(assets, audio_duration)
-    print(f"🎬 M4 storyboard-driven rendering: {len(segments)} scenes, narration={audio_duration:.3f}s")
+    print(f"🎬 M5.4 storyboard rendering: {len(segments)} scenes, narration={audio_duration:.3f}s")
     for segment in segments:
-        print(f"   S{segment['scene_id']:02d} {segment['render_start']:.3f}-{segment['render_end']:.3f}s spoken={segment['scene_start']:.3f}-{segment['scene_end']:.3f}s hold={segment['hold_after_scene']:.3f}s transform={segment['render_transform']}")
+        print(f"   S{segment['scene_id']:02d} {segment['render_start']:.3f}-{segment['render_end']:.3f}s spoken={segment['scene_start']:.3f}-{segment['scene_end']:.3f}s motion={segment['resolved_motion']} hold={segment['hold_after_scene']:.3f}s transform={segment['render_transform']}")
 
     silent_path = OUTPUT_DIR / f"_silent_{timestamp}.mp4"
     build_visuals_segment(segments, silent_path)
     renderer_manifest_path.write_text(json.dumps({
-        "schema_version": 1, "timestamp": timestamp,
+        "schema_version": 2, "milestone": "M5.4", "timestamp": timestamp,
         "strategy": "storyboard_scene_start_cuts_with_previous_scene_pause_hold",
-        "source_card_strategy": "readable_mobile_card",
+        "source_card_strategy": "concise_caption_safe_mobile_card",
+        "motion_policy": {
+            "allowed_still_motions": sorted(ALLOWED_MOTIONS),
+            "video_policy": "preserve_native_motion",
+            "source_card_policy": "static_for_readability",
+        },
         "target_width": TARGET_WIDTH, "target_height": TARGET_HEIGHT, "target_fps": TARGET_FPS,
         "audio_duration": audio_duration, "scene_count": len(segments), "segments": segments,
     }, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -235,7 +301,7 @@ def main() -> None:
         cmd = ["ffmpeg", "-y", "-i", str(silent_path), "-i", str(voice_path), "-filter_complex", f"[0:v]subtitles='{subs_arg}':force_style='{SUBTITLE_STYLE}'[outv]", "-map", "[outv]", "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(TARGET_FPS), "-c:a", "aac", "-shortest", str(final_path)]
     run(cmd)
     silent_path.unlink(missing_ok=True)
-    print(f"✅ M4 render ready: {final_path.name}")
+    print(f"✅ M5.4 render ready: {final_path.name}")
     print(f"✅ Renderer manifest: {renderer_manifest_path.name}")
 
 
