@@ -3,7 +3,7 @@ Step 4: Caption Composer
 ------------------------
 Builds readable SRT captions directly from the authoritative Edge-TTS
 narration timeline. There is no speech-to-text step: captions use the same
-words and timings that produced the voice audio.
+canonical words and timings that produced the voice audio.
 """
 
 import json
@@ -14,6 +14,7 @@ MIN_WORDS = 2
 MAX_WORDS = 6
 MAX_CHARS = 42
 PAUSE_BREAK_SECONDS = 0.45
+TERMINAL_PUNCTUATION = (".", "?", "!")
 
 
 def find_latest_timeline() -> Path:
@@ -39,6 +40,10 @@ def should_break(chunk: list[dict], next_word: dict | None) -> bool:
     if len(chunk) >= MAX_WORDS:
         return True
     if next_word is None:
+        return True
+
+    last_token = str(chunk[-1]["word"]).rstrip()
+    if last_token.endswith(TERMINAL_PUNCTUATION):
         return True
     if len(chunk) < MIN_WORDS:
         return False
@@ -117,6 +122,11 @@ def validate_cues(cues: list[dict], words: list[dict], timeline_duration: float)
 
     if flattened != list(range(len(words))):
         raise ValueError("Caption cues do not cover every narration word exactly once.")
+
+    source_text = " ".join(word["word"] for word in words)
+    cue_text = " ".join(cue["text"] for cue in cues)
+    if cue_text != source_text:
+        raise ValueError("Caption text differs from canonical narration.")
 
 
 def write_srt(cues: list[dict], out_path: Path) -> None:
