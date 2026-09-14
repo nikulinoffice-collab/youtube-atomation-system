@@ -1,0 +1,92 @@
+name: M5.5 One-Shot Certification
+
+on:
+  push:
+    branches:
+      - factory-v1-storyboard
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Install Playwright Chromium
+        run: playwright install --with-deps chromium
+      - name: Compile M5 production agents
+        run: |
+          python -m py_compile agents/script_agent.py agents/voice_agent.py agents/captions_agent.py agents/storyboard_agent.py agents/visuals_agent.py agents/visual_ranker.py agents/visuals_m53_agent.py agents/video_agent.py agents/visual_qc_agent.py agents/qc_agent.py
+      - name: Validate required free-tier API secrets
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          test -n "$GEMINI_API_KEY" || { echo 'Missing GEMINI_API_KEY'; exit 1; }
+          test -n "$PEXELS_API_KEY" || { echo 'Missing PEXELS_API_KEY'; exit 1; }
+      - name: Generate full M5.5 draft
+        working-directory: agents
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          python script_agent.py
+          python voice_agent.py
+          python captions_agent.py
+          python storyboard_agent.py
+          python visuals_m53_agent.py
+          python video_agent.py
+          python qc_agent.py
+      - name: Certify complete M5.5 debug package
+        run: |
+          shopt -s nullglob
+          finals=(agents/output/final_[0-9]*.mp4)
+          voices=(agents/output/voice_[0-9]*.mp3)
+          timelines=(agents/output/narration_timeline_[0-9]*.json)
+          captions=(agents/output/captions_[0-9]*.srt)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
+          assets=(agents/output/asset_manifest_[0-9]*.json)
+          renderers=(agents/output/renderer_manifest_[0-9]*.json)
+          qcs=(agents/output/qc_report_[0-9]*.json)
+          visualqcs=(agents/output/visual_qc_report_[0-9]*.json)
+          reports=(agents/output/visual_selection_report_[0-9]*.md)
+          for arr in finals voices timelines captions storyboards candidates assets renderers qcs visualqcs reports; do
+            eval "count=\${#$arr[@]}"
+            test "$count" -gt 0 || { echo "Missing required artifact class: $arr"; exit 1; }
+          done
+          python - "${qcs[-1]}" "${visualqcs[-1]}" "${reports[-1]}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          qc=json.loads(Path(sys.argv[1]).read_text())
+          vqc=json.loads(Path(sys.argv[2]).read_text())
+          report=Path(sys.argv[3]).read_text()
+          assert qc.get('schema_version') == 2
+          assert qc.get('milestone') == 'M5.5'
+          assert qc.get('status') == 'PASS'
+          assert qc.get('checks',{}).get('visual_qc_status') == 'PASS'
+          assert qc.get('checks',{}).get('candidate_asset_renderer_chain_valid') is True
+          assert vqc.get('milestone') == 'M5.5' and vqc.get('status') == 'PASS'
+          assert vqc.get('checks',{}).get('exact_selected_asset_duplicates') == 0
+          assert vqc.get('checks',{}).get('max_same_visual_category_run',99) <= 2
+          assert vqc.get('checks',{}).get('motion_parameters_valid') is True
+          assert '# M5.5 Visual Selection Report' in report
+          print('M5.5 COMPLETE PACKAGE PASS')
+          PY
+      - name: Upload M5.5 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-v1-m55-${{ github.run_number }}
+          path: agents/output/
+          if-no-files-found: error
+          retention-days: 7
