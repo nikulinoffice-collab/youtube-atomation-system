@@ -2,6 +2,9 @@ name: Factory V1 - Generate Draft Short
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - factory-v1-storyboard
 
 concurrency:
   group: factory-v1-${{ github.repository }}
@@ -34,6 +37,16 @@ jobs:
       - name: Install Playwright browser
         run: playwright install --with-deps chromium
 
+      - name: Compile production agents
+        run: |
+          python -m py_compile \
+            agents/script_agent.py \
+            agents/voice_agent.py \
+            agents/captions_agent.py \
+            agents/storyboard_agent.py \
+            agents/visuals_agent.py \
+            agents/video_agent.py
+
       - name: Validate required free-tier API secrets
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -56,9 +69,34 @@ jobs:
         run: |
           python script_agent.py
           python voice_agent.py
-          python visuals_agent.py
           python captions_agent.py
+          python storyboard_agent.py
+          python visuals_agent.py
           python video_agent.py
+
+      - name: Verify M2 storyboard artifact
+        run: |
+          shopt -s nullglob
+          storyboards=(agents/output/storyboard_*.json)
+          if [ ${#storyboards[@]} -eq 0 ]; then
+            echo "No storyboard JSON was produced."
+            exit 1
+          fi
+          python - "${storyboards[-1]}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          data = json.loads(path.read_text())
+          scenes = data.get("scenes", [])
+          assert data.get("schema_version") == 1
+          assert 8 <= len(scenes) <= 12
+          assert data.get("scene_count") == len(scenes)
+          assert scenes[0]["start_word"] == 0
+          for left, right in zip(scenes, scenes[1:]):
+              assert right["start_word"] == left["end_word"] + 1
+              assert right["start"] >= left["end"] - 1e-6
+          print(f"Validated storyboard: {path.name}, scenes={len(scenes)}")
+          PY
 
       - name: Verify final MP4 exists
         run: |
