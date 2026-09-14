@@ -77,7 +77,11 @@ def extract_json(text: str) -> dict:
 
 
 def canonical_scene_text(words: list[dict], start_word: int, end_word: int) -> str:
-    return " ".join(str(word["word"]) for word in words[start_word : end_word + 1])
+    selected = words[start_word : end_word + 1]
+    return "".join(
+        str(word.get("separator_before", "")) + str(word["word"])
+        for word in selected
+    ).strip()
 
 
 def normalize_queries(value: Any) -> list[str]:
@@ -99,7 +103,6 @@ def normalize_queries(value: Any) -> list[str]:
 
 
 def materialize_and_validate(raw: dict, timeline: dict, source_timeline: str) -> dict:
-    """Validate model-owned semantic fields, then derive authoritative timings/text."""
     words = timeline.get("words")
     if not isinstance(words, list) or not words:
         raise StoryboardValidationError("Narration timeline contains no words.")
@@ -191,7 +194,6 @@ def materialize_and_validate(raw: dict, timeline: dict, source_timeline: str) ->
             f"Storyboard stops at word {expected_start - 1}; final word is {len(words) - 1}."
         )
 
-    # Cross-scene timing invariants are derived, but still assert them explicitly.
     for previous, current in zip(materialized, materialized[1:]):
         if current["start_word"] != previous["end_word"] + 1:
             raise StoryboardValidationError("Storyboard word coverage is not contiguous.")
@@ -276,7 +278,6 @@ Rebuild it under these non-negotiable constraints:
 
 
 def call_gemini(client, prompt: str, max_attempts: int = 4):
-    """Retry transport/rate-limit failures without counting them as semantic repair passes."""
     delay = 15
     last_error = None
     for attempt in range(1, max_attempts + 1):
