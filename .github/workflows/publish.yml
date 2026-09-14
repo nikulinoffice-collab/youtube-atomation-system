@@ -1,6 +1,9 @@
 name: Factory V1 - Generate Draft Short
 
 on:
+  push:
+    branches:
+      - factory-v1
   workflow_dispatch:
 
 concurrency:
