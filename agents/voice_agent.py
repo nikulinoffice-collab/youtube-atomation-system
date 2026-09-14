@@ -12,7 +12,10 @@ Outputs for a script_<timestamp>.json:
 
 import asyncio
 import json
+import re
+import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 import edge_tts
@@ -21,6 +24,7 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 VOICE = "en-US-GuyNeural"
 RATE = "+0%"
 TICKS_PER_SECOND = 10_000_000
+MAX_TRAILING_AUDIO_SECONDS = 1.5
 
 
 def find_latest_script() -> Path:
@@ -32,17 +36,84 @@ def find_latest_script() -> Path:
     return scripts[-1]
 
 
+def lexical_form(token: str) -> str:
+    normalized = unicodedata.normalize("NFKC", token).casefold()
+    return "".join(ch for ch in normalized if ch.isalnum())
+
+
+def attach_canonical_tokens(text: str, boundaries: list[dict]) -> list[dict]:
+    """Keep Edge timings but restore the exact whitespace-delimited script tokens.
+
+    This makes punctuation and capitalization come from the canonical narration,
+    not from TTS metadata. Any lexical mismatch fails closed instead of silently
+    changing the spoken/script text.
+    """
+    canonical_tokens = text.split()
+    if len(canonical_tokens) != len(boundaries):
+        raise ValueError(
+            "Canonical narration token count does not match Edge-TTS boundaries: "
+            f"script={len(canonical_tokens)}, boundaries={len(boundaries)}"
+        )
+
+    aligned: list[dict] = []
+    for index, (canonical, boundary) in enumerate(zip(canonical_tokens, boundaries)):
+        canonical_lex = lexical_form(canonical)
+        boundary_lex = lexical_form(str(boundary["boundary_text"]))
+        if not canonical_lex or canonical_lex != boundary_lex:
+            raise ValueError(
+                f"Narration token mismatch at {index}: canonical={canonical!r}, "
+                f"tts={boundary['boundary_text']!r}"
+            )
+        aligned.append(
+            {
+                "index": index,
+                "word": canonical,
+                "start": boundary["start"],
+                "end": boundary["end"],
+            }
+        )
+    return aligned
+
+
+def get_audio_duration(audio_path: Path) -> float:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(audio_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"ffprobe failed for narration audio: {result.stderr.strip()}")
+    try:
+        duration = float(result.stdout.strip())
+    except ValueError as exc:
+        raise ValueError("ffprobe returned an invalid narration duration.") from exc
+    if duration <= 0:
+        raise ValueError("Narration audio duration must be positive.")
+    return duration
+
+
 def validate_timeline(timeline: dict) -> None:
     text = timeline.get("text", "")
     words = timeline.get("words", [])
-    duration = timeline.get("duration", 0)
+    duration = float(timeline.get("duration", 0))
+    speech_end = float(timeline.get("speech_end", 0))
 
     if not text.strip():
         raise ValueError("Narration timeline has empty canonical text.")
     if not words:
         raise ValueError("Edge-TTS returned no WordBoundary events.")
-    if duration <= 0:
-        raise ValueError("Narration timeline duration must be positive.")
+    if duration <= 0 or speech_end <= 0:
+        raise ValueError("Narration timeline durations must be positive.")
 
     previous_start = -1.0
     previous_end = 0.0
@@ -66,14 +137,20 @@ def validate_timeline(timeline: dict) -> None:
         previous_start = start
         previous_end = end
 
-    if abs(duration - previous_end) > 0.02:
+    if abs(speech_end - previous_end) > 0.02:
+        raise ValueError("speech_end does not match the final word boundary.")
+    if duration + 0.02 < speech_end:
+        raise ValueError("Narration audio ends before the final word boundary.")
+    if duration - speech_end > MAX_TRAILING_AUDIO_SECONDS:
         raise ValueError(
-            f"Timeline duration {duration:.3f}s does not match final boundary {previous_end:.3f}s."
+            f"Narration audio has excessive trailing time: {duration - speech_end:.3f}s"
         )
+    if " ".join(word["word"] for word in words) != text:
+        raise ValueError("Timeline words no longer reconstruct canonical narration exactly.")
 
 
-async def generate_voice_and_timeline(text: str, audio_path: Path) -> list[dict]:
-    """Synthesize once and capture the exact Edge-TTS WordBoundary events."""
+async def generate_voice_and_boundaries(text: str, audio_path: Path) -> list[dict]:
+    """Synthesize once and capture Edge-TTS WordBoundary timings."""
     communicate = edge_tts.Communicate(
         text, voice=VOICE, rate=RATE, boundary="WordBoundary"
     )
@@ -86,13 +163,12 @@ async def generate_voice_and_timeline(text: str, audio_path: Path) -> list[dict]
                 audio_file.write(chunk["data"])
             elif chunk_type == "WordBoundary":
                 start = float(chunk["offset"]) / TICKS_PER_SECOND
-                duration = float(chunk["duration"]) / TICKS_PER_SECOND
+                boundary_duration = float(chunk["duration"]) / TICKS_PER_SECOND
                 boundaries.append(
                     {
-                        "index": len(boundaries),
-                        "word": str(chunk["text"]),
+                        "boundary_text": str(chunk["text"]),
                         "start": round(start, 4),
-                        "end": round(start + duration, 4),
+                        "end": round(start + boundary_duration, 4),
                     }
                 )
 
@@ -115,15 +191,20 @@ def main():
     print(f"🗣️  Generating voice for: {data['title']}")
     print(f"   Voice: {VOICE}  |  Rate: {RATE}")
 
-    words = asyncio.run(generate_voice_and_timeline(script_text, voice_path))
-    duration = words[-1]["end"] if words else 0.0
+    boundaries = asyncio.run(generate_voice_and_boundaries(script_text, voice_path))
+    words = attach_canonical_tokens(script_text, boundaries)
+    speech_end = words[-1]["end"] if words else 0.0
+    audio_duration = round(get_audio_duration(voice_path), 4)
+
     timeline = {
         "schema_version": 1,
         "source_script": script_path.name,
         "text": script_text,
         "voice": VOICE,
         "rate": RATE,
-        "duration": duration,
+        "duration": audio_duration,
+        "speech_start": words[0]["start"] if words else 0.0,
+        "speech_end": speech_end,
         "words": words,
     }
     validate_timeline(timeline)
@@ -133,7 +214,10 @@ def main():
 
     print(f"✅ Voice saved: {voice_path}")
     print(f"✅ Narration timeline saved: {timeline_path}")
-    print(f"   Word boundaries: {len(words)} | timeline duration: {duration:.2f}s")
+    print(
+        f"   Canonical words: {len(words)} | speech end: {speech_end:.2f}s | "
+        f"audio duration: {audio_duration:.2f}s"
+    )
 
 
 if __name__ == "__main__":
