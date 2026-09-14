@@ -1,14 +1,17 @@
-"""M4 deterministic technical QC for Factory V1 artifacts.
+"""Deterministic technical + visual QC for Factory V1 artifacts.
 
-Fails closed if the final render, narration timeline, storyboard, asset manifest,
-renderer manifest, captions, or voice audio disagree on core timing/shape.
-Writes qc_report_<timestamp>.json only after all checks pass.
+Fails closed if the final render, narration timeline, storyboard, candidate/asset
+manifests, renderer manifest, captions, voice audio, or M5 visual-selection
+contracts disagree. Writes the canonical qc_report only after technical and
+visual QC both pass.
 """
 
 import json
 import re
 import subprocess
 from pathlib import Path
+
+from visual_qc_agent import VisualQCError, run_visual_qc
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 EXPECTED_WIDTH = 1080
@@ -81,6 +84,7 @@ def main() -> None:
         "timeline": OUTPUT_DIR / f"narration_timeline_{timestamp}.json",
         "captions": OUTPUT_DIR / f"captions_{timestamp}.srt",
         "storyboard": OUTPUT_DIR / f"storyboard_{timestamp}.json",
+        "candidates": OUTPUT_DIR / f"candidate_manifest_{timestamp}.json",
         "assets": OUTPUT_DIR / f"asset_manifest_{timestamp}.json",
         "renderer": OUTPUT_DIR / f"renderer_manifest_{timestamp}.json",
         "final": OUTPUT_DIR / f"final_{timestamp}.mp4",
@@ -155,8 +159,14 @@ def main() -> None:
         if abs(float(left["render_end"]) - float(right["render_start"])) > BOUNDARY_TOLERANCE:
             raise SystemExit("Rendered timeline has a gap or overlap.")
 
+    try:
+        visual_qc, visual_qc_path, visual_selection_path = run_visual_qc(timestamp)
+    except VisualQCError as exc:
+        raise SystemExit(f"M5.5 visual QC failed: {exc}") from exc
+
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "milestone": "M5.5",
         "timestamp": timestamp,
         "status": "PASS",
         "checks": {
@@ -174,6 +184,12 @@ def main() -> None:
             "scene_timing_preserved": True,
             "asset_provenance_preserved": True,
             "render_timeline_contiguous": True,
+            "visual_qc_status": visual_qc["status"],
+            "selected_assets_unique": visual_qc["checks"]["selected_asset_ids_unique"],
+            "max_same_visual_category_run": visual_qc["checks"]["max_same_visual_category_run"],
+            "motion_parameters_valid": visual_qc["checks"]["motion_parameters_valid"],
+            "candidate_asset_renderer_chain_valid": True,
+            "source_card_caption_safe_bottom_px": visual_qc["checks"]["source_card_caption_safe_bottom_px"],
         },
         "durations": {
             "timeline": timeline_duration,
@@ -181,11 +197,16 @@ def main() -> None:
             "captions_end": caption_end,
             "final": final_duration,
         },
-        "artifacts": {key: path.name for key, path in paths.items()},
+        "artifacts": {
+            **{key: path.name for key, path in paths.items()},
+            "visual_qc": visual_qc_path.name,
+            "visual_selection_report": visual_selection_path.name,
+        },
     }
     report_path = OUTPUT_DIR / f"qc_report_{timestamp}.json"
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"✅ M4 QC PASS: {report_path.name}")
+    print(f"✅ M5.5 QC PASS: {report_path.name}")
+    print(f"✅ Visual selection report: {visual_selection_path.name}")
     print(json.dumps(report["checks"], indent=2))
 
 
