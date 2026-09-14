@@ -75,7 +75,10 @@ def validate_timeline(timeline: dict) -> None:
 
 async def generate_voice_and_timeline(text: str, audio_path: Path) -> list[dict]:
     """Synthesize once and capture the exact Edge-TTS WordBoundary events."""
-    communicate = edge_tts.Communicate(text, voice=VOICE, rate=RATE)
+    # edge-tts 7.2+ defaults to sentence boundaries, so word timing must be explicit.
+    communicate = edge_tts.Communicate(
+        text, voice=VOICE, rate=RATE, boundary="word"
+    )
     boundaries: list[dict] = []
 
     with audio_path.open("wb") as audio_file:
