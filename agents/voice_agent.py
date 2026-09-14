@@ -58,7 +58,6 @@ def validate_timeline(timeline: dict) -> None:
             raise ValueError(f"Invalid timing for narration word {expected_index}: {start}..{end}")
         if start < previous_start:
             raise ValueError("Narration word starts are not monotonic.")
-        # Small floating-point tolerance only; real overlapping boundaries fail closed.
         if start + 1e-6 < previous_end:
             raise ValueError(
                 f"Overlapping narration boundaries at word {expected_index}: "
@@ -75,9 +74,8 @@ def validate_timeline(timeline: dict) -> None:
 
 async def generate_voice_and_timeline(text: str, audio_path: Path) -> list[dict]:
     """Synthesize once and capture the exact Edge-TTS WordBoundary events."""
-    # edge-tts 7.2+ defaults to sentence boundaries, so word timing must be explicit.
     communicate = edge_tts.Communicate(
-        text, voice=VOICE, rate=RATE, boundary="word"
+        text, voice=VOICE, rate=RATE, boundary="WordBoundary"
     )
     boundaries: list[dict] = []
 
