@@ -6,10 +6,10 @@ The same synthesis pass writes both the MP3 audio and the authoritative
 word-boundary timeline used by captions and storyboard.
 
 Canonical text remains the source of truth. Edge-TTS may split punctuation-
-joined text (for example ``think—should`` or ``30-second``) into multiple word
-boundaries, so alignment is performed against lexical spans rather than plain
-whitespace tokens. Exact original punctuation/spacing is preserved through
-``separator_before`` + ``word`` fields.
+joined text (for example ``think—should``) or keep compounds such as
+``billion-dollar`` as one WordBoundary. Alignment therefore operates on
+lexical spans and can merge adjacent canonical lexical tokens into one TTS
+boundary while preserving exact source punctuation and spacing.
 
 Outputs for a script_<timestamp>.json:
     voice_<timestamp>.mp3
@@ -49,14 +49,7 @@ def lexical_form(token: str) -> str:
 
 
 def canonical_lexical_tokens(text: str) -> list[dict]:
-    """Split canonical text into spoken lexical units without losing formatting.
-
-    ``word`` owns punctuation immediately following its lexical core until the
-    first whitespace before the next core. ``separator_before`` owns initial or
-    inter-word whitespace plus any opening punctuation after that whitespace.
-    Concatenating separator_before + word for every token reproduces ``text``
-    byte-for-byte.
-    """
+    """Split canonical text into lexical units without losing formatting."""
     matches = list(LEXICAL_RE.finditer(text))
     if not matches:
         return []
@@ -94,33 +87,87 @@ def canonical_lexical_tokens(text: str) -> list[dict]:
     return tokens
 
 
+def merge_canonical_group(group: list[dict]) -> tuple[str, str]:
+    """Return exact separator/word text for canonical tokens mapped to one boundary."""
+    if not group:
+        raise ValueError("Cannot merge an empty canonical token group.")
+    separator = str(group[0]["separator_before"])
+    word = str(group[0]["word"])
+    for token in group[1:]:
+        word += str(token["separator_before"]) + str(token["word"])
+    return separator, word
+
+
 def attach_canonical_tokens(text: str, boundaries: list[dict]) -> list[dict]:
-    """Keep Edge timings while restoring exact canonical punctuation/spacing."""
+    """Keep Edge timings while restoring exact canonical punctuation/spacing.
+
+    Edge sometimes emits a single boundary for a punctuation compound that our
+    canonical lexical tokenizer represents as multiple lexical cores. We align
+    sequentially by accumulating canonical cores until their normalized lexical
+    form equals the current TTS boundary. This is strict and fail-closed: every
+    canonical core and every boundary must be consumed exactly once.
+    """
     canonical_tokens = canonical_lexical_tokens(text)
-    if len(canonical_tokens) != len(boundaries):
-        raise ValueError(
-            "Canonical narration lexical token count does not match Edge-TTS boundaries: "
-            f"script={len(canonical_tokens)}, boundaries={len(boundaries)}"
-        )
+    if not canonical_tokens:
+        raise ValueError("Canonical narration contains no lexical tokens.")
+    if not boundaries:
+        raise ValueError("Edge-TTS returned no WordBoundary events.")
 
     aligned: list[dict] = []
-    for index, (canonical, boundary) in enumerate(zip(canonical_tokens, boundaries)):
-        canonical_lex = lexical_form(canonical["lexical_core"])
+    canonical_index = 0
+    for boundary_index, boundary in enumerate(boundaries):
         boundary_lex = lexical_form(str(boundary["boundary_text"]))
-        if not canonical_lex or canonical_lex != boundary_lex:
+        if not boundary_lex:
+            raise ValueError(f"TTS boundary {boundary_index} has no lexical content.")
+        if canonical_index >= len(canonical_tokens):
             raise ValueError(
-                f"Narration lexical mismatch at {index}: canonical={canonical['lexical_core']!r}, "
-                f"tts={boundary['boundary_text']!r}"
+                f"TTS returned extra boundary {boundary_index}: {boundary['boundary_text']!r}"
             )
+
+        group: list[dict] = []
+        combined = ""
+        while canonical_index < len(canonical_tokens):
+            token = canonical_tokens[canonical_index]
+            token_lex = lexical_form(str(token["lexical_core"]))
+            if not token_lex:
+                raise ValueError(f"Canonical token {canonical_index} has no lexical content.")
+            candidate = combined + token_lex
+            if not boundary_lex.startswith(candidate):
+                raise ValueError(
+                    f"Narration lexical mismatch at TTS boundary {boundary_index}: "
+                    f"canonical_prefix={candidate!r}, tts={boundary_lex!r}, "
+                    f"boundary_text={boundary['boundary_text']!r}"
+                )
+            group.append(token)
+            combined = candidate
+            canonical_index += 1
+            if combined == boundary_lex:
+                break
+
+        if combined != boundary_lex:
+            raise ValueError(
+                f"Canonical narration could not fully match TTS boundary {boundary_index}: "
+                f"canonical={combined!r}, tts={boundary_lex!r}"
+            )
+
+        separator, word = merge_canonical_group(group)
         aligned.append(
             {
-                "index": index,
-                "separator_before": canonical["separator_before"],
-                "word": canonical["word"],
+                "index": boundary_index,
+                "separator_before": separator,
+                "word": word,
                 "start": boundary["start"],
                 "end": boundary["end"],
             }
         )
+
+    if canonical_index != len(canonical_tokens):
+        remaining = canonical_tokens[canonical_index: canonical_index + 3]
+        raise ValueError(
+            "Canonical narration has lexical tokens with no TTS boundary after alignment: "
+            + repr([token["lexical_core"] for token in remaining])
+        )
+
     return aligned
 
 
@@ -131,14 +178,8 @@ def reconstruct_text(words: list[dict]) -> str:
 def get_audio_duration(audio_path: Path) -> float:
     result = subprocess.run(
         [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(audio_path),
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path),
         ],
         capture_output=True,
         text=True,
@@ -175,7 +216,6 @@ def validate_timeline(timeline: dict) -> None:
             raise ValueError("Narration word indexes are not contiguous.")
         if not str(word.get("word", "")).strip():
             raise ValueError(f"Narration word {expected_index} is empty.")
-
         start = float(word["start"])
         end = float(word["end"])
         if start < 0 or end <= start:
@@ -203,12 +243,8 @@ def validate_timeline(timeline: dict) -> None:
 
 
 async def generate_voice_and_boundaries(text: str, audio_path: Path) -> list[dict]:
-    """Synthesize once and capture Edge-TTS WordBoundary timings."""
-    communicate = edge_tts.Communicate(
-        text, voice=VOICE, rate=RATE, boundary="WordBoundary"
-    )
+    communicate = edge_tts.Communicate(text, voice=VOICE, rate=RATE, boundary="WordBoundary")
     boundaries: list[dict] = []
-
     with audio_path.open("wb") as audio_file:
         async for chunk in communicate.stream():
             chunk_type = chunk.get("type")
@@ -224,7 +260,6 @@ async def generate_voice_and_boundaries(text: str, audio_path: Path) -> list[dic
                         "end": round(start + boundary_duration, 4),
                     }
                 )
-
     if not audio_path.exists() or audio_path.stat().st_size == 0:
         raise ValueError("Edge-TTS produced no audio bytes.")
     return boundaries
@@ -261,14 +296,12 @@ def main():
         "words": words,
     }
     validate_timeline(timeline)
-    timeline_path.write_text(
-        json.dumps(timeline, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    timeline_path.write_text(json.dumps(timeline, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print(f"✅ Voice saved: {voice_path}")
     print(f"✅ Narration timeline saved: {timeline_path}")
     print(
-        f"   Canonical lexical words: {len(words)} | speech end: {speech_end:.2f}s | "
+        f"   Canonical/TTS aligned words: {len(words)} | speech end: {speech_end:.2f}s | "
         f"audio duration: {audio_duration:.2f}s"
     )
 
