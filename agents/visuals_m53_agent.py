@@ -5,9 +5,24 @@ import requests
 import visuals_agent as base
 from visual_ranker import rank_scene, register
 
+ALLOWED_MOTIONS = {"static", "slow_push_in", "slow_pull_out", "pan_left", "pan_right"}
+
+
+def motion_fields(scene):
+    preferred = str(scene.get("preferred_motion", "static")).strip()
+    if preferred not in ALLOWED_MOTIONS:
+        raise base.AssetAcquisitionError(
+            f"Scene {scene['scene_id']} has unsupported preferred_motion {preferred!r}"
+        )
+    return {
+        "preferred_motion": preferred,
+        "shot_type": str(scene.get("shot_type", "")),
+    }
+
 
 def selected_entry(scene, candidate, path):
     item = base.selected_entry(scene, candidate, path)
+    item.update(motion_fields(scene))
     rank = candidate["ranking"]
     item["selection"] = {
         "rank": rank["rank"], "final_score": rank["final_score"],
@@ -23,6 +38,9 @@ def acquire(scene, ranked, timestamp, source_url, reserved):
         path = base.OUTPUT_DIR / f"visual_{timestamp}_scene_{int(scene['scene_id']):02d}_source.jpg"
         if base.capture_source_screenshot(source_url, path):
             item = base.source_entry(scene, source_url, path)
+            item.update(motion_fields(scene))
+            # Source cards stay visually stable so headline readability wins over motion.
+            item["preferred_motion"] = "static"
             item["selection"] = {"rank":1,"final_score":100.0,"technical_score":36.0,"semantic_score":64.0,"penalty_total":0.0,"visual_category":"source_card","reasons":["canonical source article"]}
             return item, None
         path.unlink(missing_ok=True)
@@ -91,7 +109,7 @@ def main():
             selected_ids.add(str(winner["asset_id"]))
         else:
             previous.append("source_card"); category_counts["source_card"] += 1
-        print(f"scene {scene['scene_id']}: selected={asset['asset_id']} rank={asset['selection']['rank']} score={asset['selection']['final_score']}")
+        print(f"scene {scene['scene_id']}: selected={asset['asset_id']} rank={asset['selection']['rank']} score={asset['selection']['final_score']} motion={asset['preferred_motion']}")
 
     candidate_manifest = {
         "schema_version":2, "milestone":"M5.3", "source_storyboard":storyboard_path.name,
@@ -104,7 +122,7 @@ def main():
     candidate_path = base.OUTPUT_DIR / f"candidate_manifest_{timestamp}.json"
     candidate_path.write_text(json.dumps(candidate_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    asset_manifest = {"schema_version":3,"source_storyboard":storyboard_path.name,"source_candidate_manifest":candidate_path.name,"scene_count":len(scenes),"acquisition_strategy":"semantic_ranked_with_global_diversity_penalties","assets":assets}
+    asset_manifest = {"schema_version":4,"source_storyboard":storyboard_path.name,"source_candidate_manifest":candidate_path.name,"scene_count":len(scenes),"acquisition_strategy":"semantic_ranked_with_global_diversity_penalties","motion_contract":"M5.4 preferred_motion propagated from storyboard; source cards forced static","assets":assets}
     base.validate_manifest(asset_manifest, storyboard)
     asset_path = base.OUTPUT_DIR / f"asset_manifest_{timestamp}.json"
     asset_path.write_text(json.dumps(asset_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
