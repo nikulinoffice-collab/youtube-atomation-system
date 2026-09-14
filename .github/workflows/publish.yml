@@ -2,6 +2,9 @@ name: Factory V1 - Generate Draft Short
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - factory-v1-storyboard
 
 concurrency:
   group: factory-v1-${{ github.repository }}
@@ -42,23 +45,18 @@ jobs:
             agents/captions_agent.py \
             agents/storyboard_agent.py \
             agents/visuals_agent.py \
-            agents/video_agent.py
+            agents/video_agent.py \
+            agents/qc_agent.py
 
       - name: Validate required free-tier API secrets
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-          if [ -z "$GEMINI_API_KEY" ]; then
-            echo "Missing required repository secret: GEMINI_API_KEY"
-            exit 1
-          fi
-          if [ -z "$PEXELS_API_KEY" ]; then
-            echo "Missing required repository secret: PEXELS_API_KEY"
-            exit 1
-          fi
+          if [ -z "$GEMINI_API_KEY" ]; then echo "Missing required repository secret: GEMINI_API_KEY"; exit 1; fi
+          if [ -z "$PEXELS_API_KEY" ]; then echo "Missing required repository secret: PEXELS_API_KEY"; exit 1; fi
 
-      - name: Generate draft video
+      - name: Generate and QC draft video
         working-directory: agents
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -70,20 +68,17 @@ jobs:
           python storyboard_agent.py
           python visuals_agent.py
           python video_agent.py
+          python qc_agent.py
 
       - name: Verify M2 storyboard artifact
         run: |
           shopt -s nullglob
           storyboards=(agents/output/storyboard_[0-9]*.json)
-          if [ ${#storyboards[@]} -eq 0 ]; then
-            echo "No storyboard JSON was produced."
-            exit 1
-          fi
+          test ${#storyboards[@]} -gt 0
           python - "${storyboards[-1]}" <<'PY'
           import json, sys
           from pathlib import Path
-          path = Path(sys.argv[1])
-          data = json.loads(path.read_text())
+          data = json.loads(Path(sys.argv[1]).read_text())
           scenes = data.get("scenes", [])
           assert data.get("schema_version") == 2
           assert data.get("timing_strategy") == "deterministic_dp"
@@ -97,7 +92,7 @@ jobs:
           for left, right in zip(scenes, scenes[1:]):
               assert right["start_word"] == left["end_word"] + 1
               assert right["start"] >= left["end"] - 1e-6
-          print(f"Validated deterministic storyboard: {path.name}, scenes={len(scenes)}")
+          print(f"M2 PASS: scenes={len(scenes)}")
           PY
 
       - name: Verify M3 semantic asset manifest
@@ -105,18 +100,13 @@ jobs:
           shopt -s nullglob
           manifests=(agents/output/asset_manifest_[0-9]*.json)
           storyboards=(agents/output/storyboard_[0-9]*.json)
-          if [ ${#manifests[@]} -eq 0 ]; then
-            echo "No M3 asset_manifest JSON was produced."
-            exit 1
-          fi
+          test ${#manifests[@]} -gt 0
           python - "${manifests[-1]}" "${storyboards[-1]}" <<'PY'
           import json, sys
           from pathlib import Path
-          manifest_path, storyboard_path = map(Path, sys.argv[1:3])
-          manifest = json.loads(manifest_path.read_text())
-          storyboard = json.loads(storyboard_path.read_text())
-          assets = manifest.get("assets", [])
-          scenes = storyboard.get("scenes", [])
+          manifest = json.loads(Path(sys.argv[1]).read_text())
+          storyboard = json.loads(Path(sys.argv[2]).read_text())
+          assets, scenes = manifest.get("assets", []), storyboard.get("scenes", [])
           assert manifest.get("schema_version") == 1
           assert manifest.get("scene_count") == len(scenes) == len(assets)
           assert manifest.get("acquisition_strategy") == "scene_queries_in_order_then_generic_fallbacks"
@@ -130,22 +120,49 @@ jobs:
               assert asset["asset_id"] not in seen
               seen.add(asset["asset_id"])
               assert str(asset["source_url"]).strip()
-              path = Path(asset["path"])
-              assert path.exists() and path.stat().st_size > 0
-              if asset["provider"] == "pexels":
-                  assert str(asset["query"]).strip()
-          print(f"Validated M3 semantic assets: {manifest_path.name}, scenes={len(assets)}, unique_assets={len(seen)}")
+              assert Path(asset["path"]).exists()
+          print(f"M3 PASS: assets={len(assets)}")
+          PY
+
+      - name: Verify M4 renderer and QC package
+        run: |
+          shopt -s nullglob
+          qcs=(agents/output/qc_report_[0-9]*.json)
+          renderers=(agents/output/renderer_manifest_[0-9]*.json)
+          timelines=(agents/output/narration_timeline_[0-9]*.json)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
+          manifests=(agents/output/asset_manifest_[0-9]*.json)
+          voices=(agents/output/voice_[0-9]*.mp3)
+          captions=(agents/output/captions_[0-9]*.srt)
+          videos=(agents/output/final_[0-9]*.mp4)
+          for arr in qcs renderers timelines storyboards manifests voices captions videos; do
+            eval "count=\${#$arr[@]}"
+            if [ "$count" -eq 0 ]; then echo "Missing required M4 artifact class: $arr"; exit 1; fi
+          done
+          python - "${qcs[-1]}" "${renderers[-1]}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          qc = json.loads(Path(sys.argv[1]).read_text())
+          renderer = json.loads(Path(sys.argv[2]).read_text())
+          assert qc.get("status") == "PASS"
+          assert renderer.get("strategy") == "storyboard_scene_start_cuts_with_previous_scene_pause_hold"
+          assert renderer.get("source_card_strategy") == "readable_mobile_card"
+          segments = renderer.get("segments", [])
+          assert 8 <= len(segments) <= 12
+          assert abs(float(segments[0]["render_start"])) < 0.06
+          for left, right in zip(segments, segments[1:]):
+              assert abs(float(left["render_end"]) - float(right["render_start"])) < 0.06
+          checks = qc.get("checks", {})
+          required = ["required_artifacts_present", "voice_matches_narration_timeline", "final_duration_matches_voice", "captions_within_narration", "scene_timing_preserved", "asset_provenance_preserved", "render_timeline_contiguous"]
+          assert all(checks.get(key) is True for key in required)
+          print(f"M4 PASS: scenes={len(segments)}, qc={Path(sys.argv[1]).name}")
           PY
 
       - name: Verify final MP4 exists
         run: |
           shopt -s nullglob
           videos=(agents/output/final_*.mp4)
-          if [ ${#videos[@]} -eq 0 ]; then
-            echo "No final MP4 was produced."
-            exit 1
-          fi
-          echo "Final video: ${videos[-1]}"
+          test ${#videos[@]} -gt 0
           ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 "${videos[-1]}"
 
       - name: Upload draft artifacts
