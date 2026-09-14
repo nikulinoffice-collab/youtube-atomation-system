@@ -77,7 +77,7 @@ jobs:
       - name: Verify M2 storyboard artifact
         run: |
           shopt -s nullglob
-          storyboards=(agents/output/storyboard_*.json)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
           if [ ${#storyboards[@]} -eq 0 ]; then
             echo "No storyboard JSON was produced."
             exit 1
@@ -88,14 +88,19 @@ jobs:
           path = Path(sys.argv[1])
           data = json.loads(path.read_text())
           scenes = data.get("scenes", [])
-          assert data.get("schema_version") == 1
+          assert data.get("schema_version") == 2
+          assert data.get("timing_strategy") == "deterministic_dp"
           assert 8 <= len(scenes) <= 12
           assert data.get("scene_count") == len(scenes)
           assert scenes[0]["start_word"] == 0
+          for scene in scenes:
+              assert 1.2 - 1e-6 <= float(scene["duration"]) <= 6.0 + 1e-6
+              assert len(scene.get("search_queries", [])) >= 2
+              assert scene.get("visual_intent")
           for left, right in zip(scenes, scenes[1:]):
               assert right["start_word"] == left["end_word"] + 1
               assert right["start"] >= left["end"] - 1e-6
-          print(f"Validated storyboard: {path.name}, scenes={len(scenes)}")
+          print(f"Validated deterministic storyboard: {path.name}, scenes={len(scenes)}")
           PY
 
       - name: Verify final MP4 exists
