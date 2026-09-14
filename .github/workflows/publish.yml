@@ -113,24 +113,79 @@ jobs:
           print(f"M5.1 PASS: scenes={len(scenes)}")
           PY
 
-      - name: Verify M3 semantic asset manifest
+      - name: Verify M5.2 candidate retrieval manifest
         run: |
           shopt -s nullglob
-          manifests=(agents/output/asset_manifest_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
           storyboards=(agents/output/storyboard_[0-9]*.json)
-          test ${#manifests[@]} -gt 0
-          python - "${manifests[-1]}" "${storyboards[-1]}" <<'PY'
+          test ${#candidates[@]} -gt 0
+          test ${#storyboards[@]} -gt 0
+          python - "${candidates[-1]}" "${storyboards[-1]}" <<'PY'
           import json, sys
           from pathlib import Path
           manifest = json.loads(Path(sys.argv[1]).read_text())
           storyboard = json.loads(Path(sys.argv[2]).read_text())
-          assets, scenes = manifest.get("assets", []), storyboard.get("scenes", [])
+          scenes = storyboard.get("scenes", [])
+          pools = manifest.get("scenes", [])
           assert manifest.get("schema_version") == 1
+          assert manifest.get("milestone") == "M5.2"
+          assert manifest.get("scene_count") == len(scenes) == len(pools)
+          policy = manifest.get("retrieval_policy", {})
+          assert policy.get("semantic_ranking") is False
+          assert policy.get("video_duration_must_cover_scene") is True
+          assert int(policy.get("minimum_portrait_width", 0)) >= 540
+          assert int(policy.get("minimum_portrait_height", 0)) >= 960
+          total_candidates = 0
+          total_eligible = 0
+          for scene, pool in zip(scenes, pools):
+              assert pool["scene_id"] == scene["scene_id"]
+              strategies = pool.get("query_strategies", [])
+              assert 3 <= len(strategies) <= 5
+              assert [item["query"] for item in strategies] == scene["search_queries"]
+              retrieved = pool.get("candidates", [])
+              assert retrieved
+              ids = [str(item["asset_id"]) for item in retrieved]
+              assert len(ids) == len(set(ids))
+              eligible = [item for item in retrieved if item.get("technical_status") == "eligible"]
+              assert eligible
+              for item in retrieved:
+                  assert item.get("technical_status") in {"eligible", "rejected"}
+                  assert str(item.get("source_url", "")).strip()
+                  assert item.get("type") in {"video", "image"}
+                  if item.get("technical_status") == "eligible" and item.get("provider") == "pexels":
+                      assert int(item.get("download_width") or 0) >= 540
+                      assert int(item.get("download_height") or 0) >= 960
+                      assert int(item.get("download_height") or 0) > int(item.get("download_width") or 0)
+                      if item.get("type") == "video":
+                          assert float(item.get("provider_duration") or 0) + 1e-6 >= float(scene["duration"])
+              total_candidates += len(retrieved)
+              total_eligible += len(eligible)
+          assert total_candidates > len(scenes)
+          print(f"M5.2 PASS: scenes={len(scenes)}, candidates={total_candidates}, eligible={total_eligible}")
+          PY
+
+      - name: Verify semantic asset manifest compatibility
+        run: |
+          shopt -s nullglob
+          manifests=(agents/output/asset_manifest_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
+          storyboards=(agents/output/storyboard_[0-9]*.json)
+          test ${#manifests[@]} -gt 0
+          test ${#candidates[@]} -gt 0
+          python - "${manifests[-1]}" "${storyboards[-1]}" "${candidates[-1]}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          manifest = json.loads(Path(sys.argv[1]).read_text())
+          storyboard = json.loads(Path(sys.argv[2]).read_text())
+          candidate_manifest = json.loads(Path(sys.argv[3]).read_text())
+          assets, scenes = manifest.get("assets", []), storyboard.get("scenes", [])
+          assert manifest.get("schema_version") == 2
           assert manifest.get("scene_count") == len(scenes) == len(assets)
-          assert manifest.get("acquisition_strategy") == "scene_queries_in_order_then_generic_fallbacks"
+          assert manifest.get("source_candidate_manifest") == Path(sys.argv[3]).name
+          assert manifest.get("acquisition_strategy") == "first_technically_eligible_candidate_pending_M5.3_ranking"
           seen = set()
-          for scene, asset in zip(scenes, assets):
-              assert asset["scene_id"] == scene["scene_id"]
+          for scene, pool, asset in zip(scenes, candidate_manifest["scenes"], assets):
+              assert asset["scene_id"] == scene["scene_id"] == pool["scene_id"]
               assert abs(float(asset["scene_start"]) - float(scene["start"])) < 1e-6
               assert abs(float(asset["scene_end"]) - float(scene["end"])) < 1e-6
               assert asset["type"] in {"video", "image"}
@@ -139,7 +194,13 @@ jobs:
               seen.add(asset["asset_id"])
               assert str(asset["source_url"]).strip()
               assert Path(asset["path"]).exists()
-          print(f"M3 PASS: assets={len(assets)}")
+              if asset["provider"] == "pexels":
+                  eligible_ids = {
+                      item["asset_id"] for item in pool["candidates"]
+                      if item.get("technical_status") == "eligible"
+                  }
+                  assert asset["asset_id"] in eligible_ids
+          print(f"Asset compatibility PASS: assets={len(assets)}")
           PY
 
       - name: Verify M4 renderer and QC package
@@ -150,12 +211,13 @@ jobs:
           timelines=(agents/output/narration_timeline_[0-9]*.json)
           storyboards=(agents/output/storyboard_[0-9]*.json)
           manifests=(agents/output/asset_manifest_[0-9]*.json)
+          candidates=(agents/output/candidate_manifest_[0-9]*.json)
           voices=(agents/output/voice_[0-9]*.mp3)
           captions=(agents/output/captions_[0-9]*.srt)
           videos=(agents/output/final_[0-9]*.mp4)
-          for arr in qcs renderers timelines storyboards manifests voices captions videos; do
+          for arr in qcs renderers timelines storyboards manifests candidates voices captions videos; do
             eval "count=\${#$arr[@]}"
-            if [ "$count" -eq 0 ]; then echo "Missing required M4 artifact class: $arr"; exit 1; fi
+            if [ "$count" -eq 0 ]; then echo "Missing required artifact class: $arr"; exit 1; fi
           done
           python - "${qcs[-1]}" "${renderers[-1]}" <<'PY'
           import json, sys
