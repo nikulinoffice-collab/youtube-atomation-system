@@ -67,7 +67,7 @@ jobs:
           python video_agent.py
           python qc_agent.py
 
-      - name: Verify M2 storyboard artifact
+      - name: Verify M5.1 visual direction contract
         run: |
           shopt -s nullglob
           storyboards=(agents/output/storyboard_[0-9]*.json)
@@ -77,19 +77,40 @@ jobs:
           from pathlib import Path
           data = json.loads(Path(sys.argv[1]).read_text())
           scenes = data.get("scenes", [])
-          assert data.get("schema_version") == 2
+          assert data.get("schema_version") == 3
           assert data.get("timing_strategy") == "deterministic_dp"
+          assert data.get("visual_direction_contract") == "m5.1"
           assert 8 <= len(scenes) <= 12
           assert data.get("scene_count") == len(scenes)
           assert scenes[0]["start_word"] == 0
+          allowed_specificity = {"low", "medium", "high"}
+          allowed_motion = {"static", "slow_push_in", "slow_pull_out", "pan_left", "pan_right"}
+          allowed_shots = {"close_up", "medium", "wide", "over_shoulder", "screen_detail", "portrait", "environment", "source_card"}
+          allowed_strategies = {"direct_subject", "action_driven", "environment_driven", "cinematic", "fallback"}
           for scene in scenes:
               assert 1.2 - 1e-6 <= float(scene["duration"]) <= 6.0 + 1e-6
-              assert len(scene.get("search_queries", [])) >= 2
+              assert scene.get("visual_goal") and len(scene["visual_goal"]) >= 20
+              assert 2 <= len(scene.get("must_show", [])) <= 5
+              assert 1 <= len(scene.get("avoid", [])) <= 5
+              assert scene.get("subject") and scene.get("action") and scene.get("environment")
+              assert scene.get("specificity_required") in allowed_specificity
+              assert scene.get("preferred_motion") in allowed_motion
+              assert scene.get("shot_type") in allowed_shots
+              strategies = scene.get("query_strategies", [])
+              assert 3 <= len(strategies) <= 5
+              kinds = [item["strategy"] for item in strategies]
+              queries = [item["query"] for item in strategies]
+              assert len(kinds) == len(set(kinds))
+              assert set(kinds) <= allowed_strategies
+              assert kinds.count("fallback") == 1
+              assert len(set(kinds) - {"fallback"}) >= 2
+              assert len({q.casefold() for q in queries}) == len(queries)
+              assert scene.get("search_queries") == queries
               assert scene.get("visual_intent")
           for left, right in zip(scenes, scenes[1:]):
               assert right["start_word"] == left["end_word"] + 1
               assert right["start"] >= left["end"] - 1e-6
-          print(f"M2 PASS: scenes={len(scenes)}")
+          print(f"M5.1 PASS: scenes={len(scenes)}")
           PY
 
       - name: Verify M3 semantic asset manifest
