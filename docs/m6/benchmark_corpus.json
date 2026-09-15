@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "milestone": "M6.0",
+  "purpose": "Reproducible blind benchmark for directed English narration",
+  "production_changed": false,
+  "cases": [
+    {"id":"hook","class":"hook","text":"AI is changing everything — faster than most people realize.","tests":["naturalness","energy","landing_cadence"]},
+    {"id":"question","class":"question","text":"But what happens when the machines start making the decisions?","tests":["question_contour","intonation","pace"]},
+    {"id":"contrast","class":"contrast","text":"The technology is impressive. But there is one problem.","tests":["contrast","semantic_pause","emphasis"]},
+    {"id":"important_fact","class":"important_fact","text":"The important number is twenty-six point nine billion dollars.","tests":["slowdown","emphasis","pronunciation"]},
+    {"id":"reveal","class":"dramatic_reveal","text":"Nobody knows exactly what happens next.","tests":["suspense","lower_energy","landing_pause"]},
+    {"id":"neutral","class":"explanation","text":"A language model predicts likely continuations from the context it receives.","tests":["clarity","neutrality","anti_overacting"]},
+    {"id":"numbers_dates","class":"normalization","text":"On September 15, 2026, revenue reached $26.9 billion, up 12.5 percent.","tests":["date","currency","decimal","percentage"]},
+    {"id":"acronyms","class":"normalization","text":"The API sends JSON over HTTPS, while the GPU handles inference.","tests":["acronyms","technical_terms"]},
+    {"id":"versions_units","class":"normalization","text":"Version 3.1 processed 48 kHz audio in 250 milliseconds.","tests":["version","unit","number"]},
+    {"id":"long_sentence","class":"long_sentence","text":"Although the first result sounds convincing, a careful listener can still hear where the pacing becomes too uniform, where important words lose emphasis, and where a natural speaker would briefly pause before continuing.","tests":["micro_pauses","phrase_pacing","breath_groups"]},
+    {"id":"paragraphs","class":"multi_paragraph","text":"AI can generate a voice in seconds.\n\nThat is useful, but speed is not the same as good narration.\n\nThe real challenge is deciding how every idea should be delivered.","tests":["paragraph_pause","semantic_blocks","dynamic_range"]},
+    {"id":"short_30s","class":"complete_short","text":"AI is changing everything. But there is one problem. Nobody knows exactly what happens next. Today, models can write, reason, create images, and speak with increasingly natural voices. The surprising part is not how quickly they are improving. It is how quickly we are learning to use them. So the real question is this: what will we build next?","tests":["global_pacing","semantic_pacing","pauses","emphasis","emotion","question_contour","anti_monotony","anti_overacting"]}
+  ]
+}
