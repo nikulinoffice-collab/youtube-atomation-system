@@ -18,21 +18,25 @@ Status: IN_PROGRESS. This document is evidence-first: unknown fields remain UNKN
 |10|Word/sentence timestamps|TBD|TBD|TBD|TBD|TBD|
 |11|Python automation|YES-current|TBD|TBD|YES-repo CLI|TBD|
 |12|GitHub Actions fit|YES-current|TBD|TBD|LIKELY-CPU|TBD|
-|13|GPU required|NO-current|NO-client|TBD|NO (repo states 4-core CPU streaming)|TBD|
+|13|GPU required|NO-current|NO-client|TBD|NO (repo states CPU operation)|TBD|
 |14|Generation speed|MEASURE|MEASURE|MEASURE|MEASURE|MEASURE|
 |15|Free-use limits|current baseline|VERIFY CURRENT|local model|local model|local model|
-|16|YouTube/TikTok license|VERIFY TERMS|VERIFY TERMS|VERIFY WEIGHTS|Apache-2.0 family evidence; verify Nano root LICENSE|Apache-2.0 weights evidence|
-|17|Commercial output|VERIFY|VERIFY|VERIFY|VERIFY|Apache-2.0 weights evidence|
+|16|YouTube/TikTok license|VERIFY TERMS|VERIFY TERMS|VERIFY EXACT NANO WEIGHTS|Apache-2.0 repository; verify exact distributed weights/model card|Apache-2.0 weights evidence|
+|17|Commercial output|VERIFY|VERIFY|VERIFY EXACT NANO WEIGHTS|PROVISIONAL: Apache-2.0 repository grant; exact weights/model card still required|PROVISIONAL YES: Apache-2.0 weights; wrapper/dependencies still require audit|
 |18|Model quality/size|service|service|TBD|~0.1B params|~82M params|
 |19|Integration complexity|MEASURE|MEASURE|MEASURE|MEASURE|MEASURE|
 |20|Availability risk|service dependency|preview/free-tier dependency|local/upstream dependency|local/upstream dependency|local/upstream dependency|
 
 ## Evidence captured 2026-09-15
 
-- Gemini 2.5 Flash Preview TTS pricing documentation exposes a free tier, but explicitly labels the TTS model preview and notes preview models can change and have stricter rate limits. This is not yet sufficient to certify commercial-output terms or long-term availability.
-- OpenMOSS/MOSS-TTS-Nano describes a 0.1B multilingual model, streaming inference, 48 kHz stereo output and CPU-friendly operation on a 4-core CPU. Its README says licensing follows the root LICENSE; the broader MOSS-TTS family states Apache-2.0. Nano remains provisional until the exact root LICENSE/model-weight terms are inspected directly.
-- Kokoro-82M evidence identifies ~82M parameters and Apache-2.0 model weights, supporting local deployment and commercial use under that license; exact selected wrapper dependencies must still be audited separately.
-- Chatterbox search evidence describes MIT-licensed code and emotion exaggeration control, but this matrix deliberately does not certify Chatterbox-Nano weights/commercial status until the exact Nano repository/model card is verified.
+- Gemini 2.5 Flash Preview TTS pricing documentation exposes a free tier, but explicitly labels the TTS model preview and notes preview models can change and have stricter rate limits. This is not sufficient to certify commercial-output terms or long-term availability.
+- OpenMOSS/MOSS-TTS-Nano describes a 0.1B multilingual model, 48 kHz stereo generation and CPU operation. The exact `OpenMOSS/MOSS-TTS-Nano` root LICENSE was inspected directly on 2026-09-15 and is Apache License 2.0, including a perpetual worldwide no-charge royalty-free copyright grant subject to Apache conditions. This closes the repository-code license question. It does NOT by itself prove that every separately hosted checkpoint/model weight or voice artifact is under identical terms; exact weight/model-card terms remain a required gate before commercial production certification.
+- Kokoro-82M model-card evidence identifies ~82M parameters and Apache-2.0 model weights and explicitly describes production deployment/commercial and non-commercial use. This makes Kokoro a strong local zero-cost candidate. The exact Python wrapper, phonemizer, voice assets and transitive dependencies selected for Factory still require separate audit before certification.
+- Chatterbox family evidence describes MIT-licensed code and emotion/exaggeration control, but M6 requires the specifically named Chatterbox-Nano artifact. Do not substitute a different Chatterbox repository/model for Nano and do not certify Nano commercial use until its exact repository plus model-weight/model-card terms are resolved.
+
+## Licensing gate
+
+For every local candidate, certification requires four separately recorded facts where applicable: (1) repository/code license, (2) model-weight/checkpoint license, (3) voice/model-card or other asset restrictions, and (4) restrictions affecting commercial generated output. A permissive repository license alone is never sufficient evidence for all four.
 
 ## Measurement contract
 
