@@ -6,33 +6,34 @@ Status: IN_PROGRESS. This document is evidence-first: unknown fields remain UNKN
 
 | # | Dimension | Edge legacy | Gemini TTS | Chatterbox-Nano | MOSS-TTS-Nano | Kokoro |
 |---|---|---|---|---|---|---|
-|1|Naturalness|BENCHMARK|TBD|TBD|TBD|TBD|
-|2|English quality|BENCHMARK|TBD|TBD|TBD|TBD|
-|3|Intonation|TBD|TBD|TBD|TBD|TBD|
-|4|Emotionality|TBD|TBD|TBD|TBD|TBD|
-|5|Speed control|TBD|TBD|TBD|TBD|TBD|
-|6|Pause control|TBD|TBD|TBD|TBD|TBD|
+|1|Naturalness|BENCHMARK|TBD|BENCHMARK|TBD|TBD|
+|2|English quality|BENCHMARK|TBD|English-only official Nano|TBD|TBD|
+|3|Intonation|TBD|TBD|BENCHMARK|TBD|TBD|
+|4|Emotionality|TBD|TBD|Native paralinguistic tags; BENCHMARK quality|TBD|TBD|
+|5|Speed control|TBD|TBD|No direct certification yet; benchmark pacing|TBD|TBD|
+|6|Pause control|TBD|TBD|Paralinguistic tags are not a substitute for deterministic pause measurement|TBD|TBD|
 |7|Pitch/prosody|TBD|TBD|TBD|TBD|TBD|
-|8|SSML/equivalent|TBD|TBD|TBD|TBD|TBD|
+|8|SSML/equivalent|TBD|TBD|Native paralinguistic tags; no SSML claim certified|TBD|TBD|
 |9|Pronunciation stability|MEASURE|MEASURE|MEASURE|MEASURE|MEASURE|
 |10|Word/sentence timestamps|TBD|TBD|TBD|TBD|TBD|
-|11|Python automation|YES-current|TBD|TBD|YES-repo CLI|TBD|
-|12|GitHub Actions fit|YES-current|TBD|TBD|LIKELY-CPU|TBD|
-|13|GPU required|NO-current|NO-client|TBD|NO (repo states CPU operation)|TBD|
-|14|Generation speed|MEASURE|MEASURE|MEASURE|MEASURE|MEASURE|
-|15|Free-use limits|current baseline|VERIFY CURRENT|local model|local model|local model|
-|16|YouTube/TikTok license|VERIFY TERMS|VERIFY TERMS|VERIFY EXACT NANO WEIGHTS|Apache-2.0 repository; verify exact distributed weights/model card|Apache-2.0 weights evidence|
-|17|Commercial output|VERIFY|VERIFY|VERIFY EXACT NANO WEIGHTS|PROVISIONAL: Apache-2.0 repository grant; exact weights/model card still required|PROVISIONAL YES: Apache-2.0 weights; wrapper/dependencies still require audit|
-|18|Model quality/size|service|service|TBD|~0.1B params|~82M params|
-|19|Integration complexity|MEASURE|MEASURE|MEASURE|MEASURE|MEASURE|
-|20|Availability risk|service dependency|preview/free-tier dependency|local/upstream dependency|local/upstream dependency|local/upstream dependency|
+|11|Python automation|YES-current|TBD|YES-official Python implementation|YES-repo CLI|TBD|
+|12|GitHub Actions fit|YES-current|TBD|LIKELY-CPU; must measure runner RAM/time|LIKELY-CPU|TBD|
+|13|GPU required|NO-current|NO-client|NO; official Nano targets CPU/on-device|NO (repo states CPU operation)|TBD|
+|14|Generation speed|MEASURE|MEASURE|Official claim 3x realtime on 8 CPU cores; independently MEASURE|MEASURE|MEASURE|
+|15|Free-use limits|current baseline|VERIFY CURRENT|local model; no API quota dependency|local model|local model|
+|16|YouTube/TikTok license|VERIFY TERMS|VERIFY TERMS|MIT repository; exact Nano HF checkpoint/model-card asset terms still require direct capture|Apache-2.0 repository; verify exact distributed weights/model card|Apache-2.0 weights evidence|
+|17|Commercial output|VERIFY|VERIFY|PROVISIONAL: official family is MIT/open-source; exact Nano checkpoint/assets still gated|PROVISIONAL: Apache-2.0 repository grant; exact weights/model card still required|PROVISIONAL YES: Apache-2.0 weights; wrapper/dependencies still require audit|
+|18|Model quality/size|service|service|110M params official|~0.1B params|~82M params|
+|19|Integration complexity|MEASURE|MEASURE|Python/local; MEASURE dependencies/cold start|MEASURE|MEASURE|
+|20|Availability risk|service dependency|preview/free-tier dependency|local model; upstream/download dependency|local/upstream dependency|local/upstream dependency|
 
 ## Evidence captured 2026-09-15
 
 - Gemini 2.5 Flash Preview TTS pricing documentation exposes a free tier, but explicitly labels the TTS model preview and notes preview models can change and have stricter rate limits. This is not sufficient to certify commercial-output terms or long-term availability.
 - OpenMOSS/MOSS-TTS-Nano describes a 0.1B multilingual model, 48 kHz stereo generation and CPU operation. The exact `OpenMOSS/MOSS-TTS-Nano` root LICENSE was inspected directly on 2026-09-15 and is Apache License 2.0, including a perpetual worldwide no-charge royalty-free copyright grant subject to Apache conditions. This closes the repository-code license question. It does NOT by itself prove that every separately hosted checkpoint/model weight or voice artifact is under identical terms; exact weight/model-card terms remain a required gate before commercial production certification.
 - Kokoro-82M model-card evidence identifies ~82M parameters and Apache-2.0 model weights and explicitly describes production deployment/commercial and non-commercial use. This makes Kokoro a strong local zero-cost candidate. The exact Python wrapper, phonemizer, voice assets and transitive dependencies selected for Factory still require separate audit before certification.
-- Chatterbox family evidence describes MIT-licensed code and emotion/exaggeration control, but M6 requires the specifically named Chatterbox-Nano artifact. Do not substitute a different Chatterbox repository/model for Nano and do not certify Nano commercial use until its exact repository plus model-weight/model-card terms are resolved.
+- Chatterbox-Nano identity is now resolved to the official `resemble-ai/chatterbox` family and the official Nano checkpoint path used by its implementation. The upstream README identifies Nano explicitly as a 110M English model, same architecture class as Turbo, with native paralinguistic tags, on-device/CPU targeting and an official claim of about 3x realtime on 8 CPU cores. The implementation selects a Nano-specific `t3_nano_v1.safetensors` checkpoint. The exact upstream repository LICENSE was inspected directly and is MIT. This closes the prior ambiguity where generic Chatterbox evidence could have been mistaken for Nano. It still does NOT collapse the four-part licensing gate: the exact hosted Nano checkpoint/model-card/voice asset terms must be captured before commercial certification.
+- Chatterbox-Nano outputs include provenance watermarking according to the vendor's Nano release material. Preserve this behavior; do not use third-party forks whose purpose is watermark removal.
 
 ## Licensing gate
 
@@ -41,5 +42,7 @@ For every local candidate, certification requires four separately recorded facts
 ## Measurement contract
 
 All engines must synthesize the exact same benchmark corpus. Record cold-start time, synthesis time, output duration, realtime factor (generation_seconds/audio_seconds), peak RAM where measurable, artifact size, failure/retry count, and whether GPU was used. Listening samples must be randomized to opaque IDs before human scoring.
+
+Vendor performance claims are evidence for feasibility only, never substitutes for Factory measurements. CPU speed, RAM, cold-start and RTF must be measured on the actual GitHub Actions benchmark environment before a candidate can pass M6.0.
 
 No engine may become production-selected during M6.0. M6.0 ends at HUMAN_REVIEW_REQUIRED after the technical matrix and blind sample package are complete.
