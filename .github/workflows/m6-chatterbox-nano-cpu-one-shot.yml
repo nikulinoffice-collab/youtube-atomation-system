@@ -1,0 +1,99 @@
+name: M6 Chatterbox Nano CPU One-Shot
+
+on:
+  push:
+    branches: [factory-v1-voice-m6]
+
+permissions:
+  contents: read
+
+jobs:
+  chatterbox-nano-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Record runner resources
+        run: |
+          python --version
+          nproc
+          free -m
+      - name: Install exact public runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          START=$(date +%s)
+          python -m pip install --upgrade pip
+          python -m pip install chatterbox-tts
+          python -m pip check
+          END=$(date +%s)
+          echo "install_seconds=$((END-START))"
+          python - <<'PY'
+          import torch
+          import torchaudio
+          import importlib.metadata as md
+          from chatterbox.tts_turbo import ChatterboxTurboTTS
+          print('chatterbox_tts=' + md.version('chatterbox-tts'))
+          print('torch=' + torch.__version__)
+          print('torchaudio=' + torchaudio.__version__)
+          print('cuda_available=' + str(torch.cuda.is_available()))
+          assert not torch.cuda.is_available(), 'GPU unexpectedly available'
+          assert ChatterboxTurboTTS is not None
+          PY
+      - name: Benchmark exact Nano mode on frozen corpus hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/m6-chatterbox
+          /usr/bin/time -v -o /tmp/m6-chatterbox/process_time.txt python - <<'PY'
+          import gc, json, os, resource, time, wave
+          from pathlib import Path
+          import torch
+          import torchaudio as ta
+          from chatterbox.tts_turbo import ChatterboxTurboTTS
+
+          corpus = json.loads(Path('docs/m6/benchmark_corpus.json').read_text())
+          case = next(c for c in corpus['cases'] if c['id'] == 'hook')
+          text = case['text']
+          assert text == 'AI is changing everything — faster than most people realize.'
+          assert not torch.cuda.is_available()
+
+          t0 = time.perf_counter()
+          model = ChatterboxTurboTTS.from_pretrained(device='cpu', nano=True)
+          init_seconds = time.perf_counter() - t0
+          print(f'nano_mode=PASS')
+          print(f'model_label={getattr(model, "model_label", None)}')
+          print(f'init_seconds={init_seconds:.6f}')
+          print(f'sample_rate={model.sr}')
+
+          results=[]
+          for i in range(1,4):
+              gc.collect()
+              start=time.perf_counter()
+              wav=model.generate(text)
+              synth=time.perf_counter()-start
+              out=Path(f'/tmp/m6-chatterbox/run_{i}.wav')
+              ta.save(str(out), wav.cpu(), model.sr)
+              with wave.open(str(out),'rb') as w:
+                  duration=w.getnframes()/float(w.getframerate())
+                  channels=w.getnchannels()
+                  sr=w.getframerate()
+              rtf=synth/duration
+              rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+              row={'run':i,'synthesis_seconds':synth,'audio_duration_seconds':duration,'rtf':rtf,'peak_rss_kib':rss_kib,'artifact_bytes':out.stat().st_size,'sample_rate':sr,'channels':channels}
+              results.append(row)
+              print(json.dumps(row,sort_keys=True))
+          Path('/tmp/m6-chatterbox/results.json').write_text(json.dumps({'engine':'chatterbox_nano','mode':'nano=True','case_id':case['id'],'text':text,'init_seconds':init_seconds,'cuda_available':False,'commercial_status':'TECHNICAL_ONLY_NOT_COMMERCIAL_CERTIFIED_PENDING_BUILTIN_REFERENCE_VOICE_RIGHTS','runs':results},indent=2))
+          PY
+          cat /tmp/m6-chatterbox/process_time.txt
+          du -sh ~/.cache/huggingface || true
+          cat /tmp/m6-chatterbox/results.json
+      - name: Upload technical benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: m6-chatterbox-nano-cpu-technical-only
+          path: /tmp/m6-chatterbox/
+          retention-days: 7
