@@ -2,6 +2,18 @@
 
 Status: IN_PROGRESS. Evidence captured 2026-09-15 through 2026-09-16. This audit is for benchmark feasibility and licensing/compliance gating only; it does not certify a production engine.
 
+## Gemini TTS
+
+### Zero-cost qualification gate — 2026-09-16
+
+Current official Google Gemini Developer API documentation lists `gemini-2.5-flash-preview-tts` as a text-input/audio-output TTS model with controllable voice style and pacing. The current official Gemini Developer API pricing table explicitly lists Gemini 2.5 Flash TTS Preview Standard input and output as free of charge on the Free Tier; the paid tier is separately priced at $0.50 per 1M text-input tokens and $10.00 per 1M audio-output tokens. Batch is not the zero-cost path. The same pricing table states that Free Tier content is used to improve Google's products, which is a material data-governance consideration for Factory narration even though the monetary price is zero.
+
+M6 interpretation: Gemini 2.5 Flash TTS Preview therefore passes the documentation-level `ZERO_COST_PATH_EXISTS` gate for a Standard Free Tier benchmark. It does not authorize an API call from CI by itself. A real benchmark may run only if a Gemini Developer API Free Tier credential is already available to the isolated shadow workflow and the workflow can fail closed rather than fall through to paid billing. M6 must not create/enable billing, upgrade a project, attach a billing account, or use a paid fallback merely to obtain runtime evidence. If a safely identifiable Free Tier credential is unavailable in the connected environment, runtime evidence remains `BLOCKED_BY_FREE_TIER_CREDENTIAL`, not FAIL, and the engine stays in the comparison with documentation evidence only.
+
+The current model is explicitly a preview endpoint, so availability/version-change risk remains higher than for a stable production API and must remain visible in the 20-dimension matrix. Free Tier usage also has the stated Google product-improvement data treatment and must not be conflated with the paid tier's different data-use treatment.
+
+No Gemini request was made while recording this gate; no credential, secret, billing configuration, or paid service was accessed or changed.
+
 ## Chatterbox-Nano
 
 Official `resemble-ai/chatterbox` packaging currently requires Python >=3.10 and declares numpy, librosa, s3tokenizer, torch/torchaudio, transformers, diffusers, `resemble-perth` from the upstream Perth Git repository, conformer, safetensors, spacy-pkuseg, pykakasi, gradio, pyloudnorm, and omegaconf. The package explicitly selects newer torch/torchaudio for Python 3.14. This is a materially heavier dependency stack than Kokoro and must be measured for cold-start/install time and RAM on the GitHub Actions runner.
