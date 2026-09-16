@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/m6-chatterbox
           /usr/bin/time -v -o /tmp/m6-chatterbox/process_time.txt python - <<'PY'
-          import gc, json, resource, time, wave
+          import gc, json, resource, time
           from pathlib import Path
           import torch
           import torchaudio as ta
@@ -78,11 +78,11 @@ jobs:
               wav=model.generate(text)
               synth=time.perf_counter()-start
               out=Path(f'/tmp/m6-chatterbox/run_{i}.wav')
-              ta.save(str(out), wav.cpu(), model.sr)
-              with wave.open(str(out),'rb') as w:
-                  duration=w.getnframes()/float(w.getframerate())
-                  channels=w.getnchannels()
-                  sr=w.getframerate()
+              ta.save(str(out), wav.cpu(), model.sr, encoding='PCM_S', bits_per_sample=16)
+              info=ta.info(str(out))
+              duration=info.num_frames/float(info.sample_rate)
+              channels=info.num_channels
+              sr=info.sample_rate
               rtf=synth/duration
               rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
               row={'run':i,'synthesis_seconds':synth,'audio_duration_seconds':duration,'rtf':rtf,'peak_rss_kib':rss_kib,'artifact_bytes':out.stat().st_size,'sample_rate':sr,'channels':channels}
