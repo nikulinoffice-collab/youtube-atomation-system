@@ -1,0 +1,94 @@
+name: M6 Local TTS Candidates One-Shot
+
+on:
+  push:
+    branches:
+      - factory-v1-voice-m6
+
+permissions:
+  contents: read
+
+jobs:
+  kokoro-feasibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Record runner resources
+        run: |
+          nproc
+          free -m
+          python --version
+      - name: Install Kokoro isolated dependency stack
+        run: |
+          START=$(date +%s)
+          python -m pip install "kokoro==0.9.4" soundfile
+          echo "install_seconds=$(($(date +%s)-START))"
+          python -m pip check
+      - name: Import Kokoro
+        run: |
+          python - <<'PY'
+          import kokoro
+          print('PASS: kokoro import', getattr(kokoro, '__version__', 'unknown'))
+          PY
+
+  chatterbox-nano-feasibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Record runner resources
+        run: |
+          nproc
+          free -m
+          python --version
+      - name: Install Chatterbox isolated dependency stack
+        run: |
+          START=$(date +%s)
+          python -m pip install chatterbox-tts
+          echo "install_seconds=$(($(date +%s)-START))"
+          python -m pip check
+      - name: Import Nano entrypoint
+        run: |
+          python - <<'PY'
+          from chatterbox.tts_turbo import ChatterboxTurboTTS
+          print('PASS: ChatterboxTurboTTS Nano entrypoint import')
+          PY
+
+  moss-nano-feasibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Record runner resources
+        run: |
+          nproc
+          free -m
+          python --version
+      - name: Clone exact upstream and attempt documented install
+        run: |
+          START=$(date +%s)
+          git clone --depth 1 https://github.com/OpenMOSS/MOSS-TTS-Nano.git /tmp/moss-tts-nano
+          cd /tmp/moss-tts-nano
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+          echo "install_seconds=$(($(date +%s)-START))"
+          python -m pip check
+      - name: Import MOSS package
+        run: |
+          python - <<'PY'
+          import importlib.util
+          candidates=['moss_tts_nano','moss_tts']
+          found=[x for x in candidates if importlib.util.find_spec(x)]
+          print('importable_candidates=', found)
+          assert found, 'No documented MOSS package import found after install'
+          PY
