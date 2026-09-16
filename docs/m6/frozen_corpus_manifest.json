@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "milestone": "M6.0",
+  "status": "IN_PROGRESS",
+  "purpose": "Cryptographic source-text binding for the frozen M6.0 corpus before multi-engine sample generation",
+  "source_file": "docs/m6/benchmark_corpus.json",
+  "source_blob_sha": "3f2fa5bbba73a1038e19616ee9cd2c19972beb6b",
+  "production_changed": false,
+  "hash_algorithm": "sha256",
+  "hash_contract": "UTF-8 bytes of the exact JSON text field after JSON decoding; no trimming, newline normalization, punctuation rewriting, or spoken-text normalization",
+  "cases": [
+    {"id":"hook","text_sha256":"b741bd23b86228d6f657ab63ef86ca818cc5c69589c9db976090eabbbbd09980"},
+    {"id":"question","text_sha256":"b06f891fe89306d315544467e7fb9d56dc4a0d5fef8cc2772b04c4e9c7428ef8"},
+    {"id":"contrast","text_sha256":"2b265716272236996069a54f71ff98b681d3310370182d9e941c6f10e7a2865e"},
+    {"id":"important_fact","text_sha256":"18b5a3979ec9cc00e24ed7d987a805727a20cb53c9e45d167e0035a0968b68f8"},
+    {"id":"reveal","text_sha256":"5f2c203c86bb55f2f7ab9eb5b6e78ad98f1c50f716f3edb8a5dd999c3b6a8b3d"},
+    {"id":"neutral","text_sha256":"de920438a31e5f1eb5dc3a2aee9476f4d6b7906a31eb30c0a1693eb36c88b2f2"},
+    {"id":"numbers_dates","text_sha256":"a2adca8f2ff70f98517f75616eaab1c60873b948dddb849a39a3787b8e5f84e9"},
+    {"id":"acronyms","text_sha256":"12f2632c9255555e04234f86f28b7a2c21bb416ff8f274fa85e97eec5e3c1fd8"},
+    {"id":"versions_units","text_sha256":"0d399fa59ff8556602e3d830806e4646bbfc92cbd9008ff4fcab2765d0bce919"},
+    {"id":"long_sentence","text_sha256":"80b86d6b215fd722f28cc97676e3f42eb18475f69c3e86eb07e4cc8c447a2ea1"},
+    {"id":"paragraphs","text_sha256":"f30cb36a9cce7dd8a2efeb91881a14cbde77889dbcd90fc1f46d331e252c0bcb"},
+    {"id":"short_30s","text_sha256":"b345d7e97b1b14e2a83bdb5b09b6c94e65ac913f5f0bc01e17f819177d8ad1d7"}
+  ],
+  "engine_sample_contract": {
+    "required_engines": ["edge_legacy", "edge_directed", "moss_tts_nano", "kokoro", "chatterbox_nano", "gemini_tts"],
+    "sample_binding_required": ["case_id", "source_text_sha256", "engine_id", "engine_version_or_commit", "config", "audio_sha256", "audio_duration_seconds", "synthesis_seconds", "rtf", "cold_or_warm"],
+    "gemini_tts_runtime_status": "BLOCKED_BY_FREE_TIER_CREDENTIAL_ATTESTATION",
+    "commercial_certification_note": "Runtime qualification and source binding do not certify model voice/reference/voicepack rights. Those gates remain separate."
+  }
+}
