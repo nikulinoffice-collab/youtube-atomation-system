@@ -34,16 +34,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.0 torchaudio==2.7.0
           python -m pip install "onnxruntime>=1.20.0" numpy soundfile huggingface_hub sentencepiece
+          # Upstream MOSS requires WeTextProcessing for its normal text-normalization path.
+          # Keep normalization enabled; do not bypass the missing dependency.
+          python -m pip install pynini==2.1.6.post1
+          python -m pip install git+https://github.com/WhizZest/WeTextProcessing.git
           echo "install_seconds=$(($(date +%s)-START))"
           python -m pip check
           python - <<'PY'
           import torch, torchaudio, onnxruntime as ort
+          from tn.chinese.normalizer import Normalizer as ZhNormalizer
           print('torch=', torch.__version__)
           print('torchaudio=', torchaudio.__version__)
           print('cuda_available=', torch.cuda.is_available())
           print('providers=', ort.get_available_providers())
+          print('wetext_tn_import=PASS')
           assert not torch.cuda.is_available()
           assert 'CPUExecutionProvider' in ort.get_available_providers()
+          assert ZhNormalizer is not None
           PY
       - name: Run real ONNX synthesis
         run: |
