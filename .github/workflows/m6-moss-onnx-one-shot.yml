@@ -1,0 +1,53 @@
+name: M6 MOSS Nano ONNX One-Shot
+
+on:
+  push:
+    branches:
+      - factory-v1-voice-m6
+
+permissions:
+  contents: read
+
+jobs:
+  moss-onnx-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Record runner resources
+        run: |
+          nproc
+          free -m
+          df -h /
+          python --version
+      - name: Clone exact upstream
+        run: |
+          git clone --depth 1 https://github.com/OpenMOSS/MOSS-TTS-Nano.git /tmp/moss-tts-nano
+          cd /tmp/moss-tts-nano
+          git rev-parse HEAD
+      - name: Install ONNX CPU dependencies only
+        run: |
+          START=$(date +%s)
+          python -m pip install --upgrade pip
+          python -m pip install "onnxruntime>=1.20.0" numpy soundfile huggingface_hub sentencepiece
+          echo "install_seconds=$(($(date +%s)-START))"
+          python -m pip check
+      - name: Verify ONNX entrypoint imports without torch
+        run: |
+          cd /tmp/moss-tts-nano
+          python - <<'PY'
+          import importlib.util
+          assert importlib.util.find_spec('onnxruntime') is not None
+          assert importlib.util.find_spec('torch') is None, 'torch unexpectedly installed in isolated ONNX job'
+          import onnxruntime as ort
+          print('onnxruntime=', ort.__version__)
+          print('providers=', ort.get_available_providers())
+          assert 'CPUExecutionProvider' in ort.get_available_providers()
+          PY
+      - name: Inspect documented ONNX CLI
+        run: |
+          cd /tmp/moss-tts-nano
+          python infer_onnx.py --help
