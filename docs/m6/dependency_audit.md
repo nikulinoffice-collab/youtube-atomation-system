@@ -1,6 +1,6 @@
 # M6.0 Local TTS Dependency Audit
 
-Status: IN_PROGRESS. Evidence captured 2026-09-15. This audit is for benchmark feasibility and licensing/compliance gating only; it does not certify a production engine.
+Status: IN_PROGRESS. Evidence captured 2026-09-15 through 2026-09-16. This audit is for benchmark feasibility and licensing/compliance gating only; it does not certify a production engine.
 
 ## Chatterbox-Nano
 
@@ -11,6 +11,18 @@ Gate: benchmark only the official upstream stack. Preserve Perth provenance wate
 ## MOSS-TTS-Nano
 
 Official `OpenMOSS/MOSS-TTS-Nano` requirements currently include numpy, FastAPI, python-multipart, sentencepiece, torch==2.7.0, torchaudio==2.7.0, transformers==4.57.1, uvicorn, WeTextProcessing, soundfile, and onnxruntime. Upstream setup documentation warns that WeTextProcessing/pynini may require special installation handling. The official workflow also loads a separate MOSS Audio Tokenizer model in addition to the TTS model.
+
+### Measured GitHub Actions CPU evidence — 2026-09-16
+
+Exact validation evidence: workflow run `35066198346`, job `104696923890`, source SHA `3670919d3f74d456d792d2aa80885f46da909bf3`. Runner was Ubuntu 24.04.5 (`ubuntu-24.04` image `20260907.300.1`), Python 3.12.14, 4 CPU, 15,989 MiB RAM. The benchmark pinned upstream MOSS commit `8b7bcc9341b3b4ef3a3a58ba1338a7d85ff133eb`, CPU-only `torch==2.7.0+cpu` / `torchaudio==2.7.0+cpu`, ONNX Runtime 1.30.0, `pynini==2.1.6.post1`, and WeTextProcessing commit `bb145729c903fac2d9fddf6b9077f352f3fc2816`. `pip check` passed; `torch.cuda.is_available()` was false; ONNX Runtime exposed `CPUExecutionProvider`; the validation explicitly rejected installed NVIDIA/CUDA runtime packages. Dependency installation took 36 s in this run.
+
+The cold synthesis used the exact text `Is AI really going to destroy us? The answer is more complicated than the headlines suggest.` with upstream `assets/audio/en_2.wav`. First execution downloaded approximately 728 MiB of ONNX model assets and built WeText normalization FSTs. Cold wall time was 93.90 s, cold peak RSS 8,167,700 KiB (~7.79 GiB), and output was 7.52 s, 48 kHz stereo. Cold timing therefore includes model download and one-time text-normalization construction and must not be treated as steady-state RTF.
+
+Three subsequent measured executions reused the downloaded models and existing WeText FST cache. Results were: run 1 = 20.3137 s / 7.52 s audio / RTF 2.7013 / peak RSS 2,575,732 KiB; run 2 = 21.2777 s / RTF 2.8295 / peak RSS 2,575,176 KiB; run 3 = 22.4362 s / RTF 2.9835 / peak RSS 2,574,824 KiB. Mean elapsed = 21.3425 s and mean RTF = 2.8381. Each WAV was 1,443,884 bytes, 48 kHz stereo. Failures/retries = 0; GPU use = false.
+
+Interpretation: the measured cached CLI path is materially slower than realtime on this GitHub-hosted 4-CPU runner (mean RTF 2.84). These measurements are reproducible runtime evidence for the tested pinned stack, not a universal claim about newer upstream MOSS releases or an in-process server that retains inference sessions. Current upstream documentation now advertises a newer fully standalone PyTorch-free ONNX CPU path and nearly 2x efficiency relative to the original path; that later upstream state is separate from this pinned benchmark and must not retroactively change these measurements.
+
+Licensing status remains `TECHNICAL_ONLY / NOT_COMMERCIAL_CERTIFIED`. The benchmark intentionally used the upstream bundled reference recording `assets/audio/en_2.wav`; Apache-2.0 model/code licensing does not independently establish the recording/personality rights needed for Factory commercial output. Production certification requires a Factory-owned or explicitly commercially licensed reference voice, plus the remaining dependency/output-rights audit.
 
 Gate: use a clean supported Python environment for the benchmark and measure dependency-install time separately from model cold-start. Do not treat the 100M TTS parameter count as total runtime footprint because tokenizer/model dependencies are additional. Commercial certification still requires a Factory-owned or explicitly commercially licensed prompt/reference voice.
 
