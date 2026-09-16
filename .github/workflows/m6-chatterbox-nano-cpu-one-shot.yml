@@ -21,27 +21,28 @@ jobs:
           python --version
           nproc
           free -m
-      - name: Install exact public runtime
+      - name: Install current official upstream
         shell: bash
         run: |
           set -euo pipefail
           START=$(date +%s)
           python -m pip install --upgrade pip
-          python -m pip install chatterbox-tts
+          git clone --depth 1 https://github.com/resemble-ai/chatterbox.git /tmp/chatterbox-upstream
+          git -C /tmp/chatterbox-upstream rev-parse HEAD
+          python -m pip install /tmp/chatterbox-upstream
           python -m pip check
           END=$(date +%s)
           echo "install_seconds=$((END-START))"
           python - <<'PY'
-          import torch
-          import torchaudio
-          import importlib.metadata as md
+          import inspect, torch, torchaudio
           from chatterbox.tts_turbo import ChatterboxTurboTTS
-          print('chatterbox_tts=' + md.version('chatterbox-tts'))
+          sig = inspect.signature(ChatterboxTurboTTS.from_pretrained)
+          print('from_pretrained_signature=' + str(sig))
+          assert 'nano' in sig.parameters, 'Installed upstream does not expose Nano selector'
           print('torch=' + torch.__version__)
           print('torchaudio=' + torchaudio.__version__)
           print('cuda_available=' + str(torch.cuda.is_available()))
           assert not torch.cuda.is_available(), 'GPU unexpectedly available'
-          assert ChatterboxTurboTTS is not None
           PY
       - name: Benchmark exact Nano mode on frozen corpus hook
         shell: bash
@@ -49,7 +50,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/m6-chatterbox
           /usr/bin/time -v -o /tmp/m6-chatterbox/process_time.txt python - <<'PY'
-          import gc, json, os, resource, time, wave
+          import gc, json, resource, time, wave
           from pathlib import Path
           import torch
           import torchaudio as ta
@@ -64,8 +65,9 @@ jobs:
           t0 = time.perf_counter()
           model = ChatterboxTurboTTS.from_pretrained(device='cpu', nano=True)
           init_seconds = time.perf_counter() - t0
-          print(f'nano_mode=PASS')
-          print(f'model_label={getattr(model, "model_label", None)}')
+          assert getattr(model, 'model_label', None) == 'Nano', 'Nano model identity not proven'
+          print('nano_mode=PASS')
+          print('model_label=' + str(model.model_label))
           print(f'init_seconds={init_seconds:.6f}')
           print(f'sample_rate={model.sr}')
 
