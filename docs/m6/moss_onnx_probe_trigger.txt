@@ -1,0 +1,2 @@
+M6.0 isolated MOSS-TTS-Nano ONNX CPU feasibility probe trigger.
+No production behavior change.
