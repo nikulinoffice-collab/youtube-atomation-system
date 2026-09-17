@@ -2,6 +2,11 @@ name: M6 Edge Full Corpus One Shot
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - factory-v1-voice-m6
+    paths:
+      - .github/workflows/m6-edge-full-corpus-one-shot.yml
 
 permissions:
   contents: read
