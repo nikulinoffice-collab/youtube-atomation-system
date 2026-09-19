@@ -71,3 +71,48 @@ Gate: benchmark the official package on a supported Python version. Record exact
 Local engines may require different supported Python versions. M6.0 must not force them into the production runtime merely to make one environment uniform. Benchmark jobs should use isolated environments and record: OS/runner, Python version, dependency install seconds, model download bytes/time where measurable, cold-start seconds, synthesis seconds, output duration, RTF, peak RAM where measurable, output artifact size, failures/retries, and GPU use.
 
 No dependency result in this document authorizes production migration. M6.0 remains shadow-only and ends at HUMAN_REVIEW_REQUIRED after reproducible measurements and blind samples are complete.
+
+
+## M6.0 rights-gate closure — 2026-09-19
+
+This audit applies the four-part gate separately to code/repository, model/checkpoint, voice/reference asset, and generated-output/commercial restrictions. A permissive code or checkpoint license is not treated as proof of rights to a distinct voice/reference asset.
+
+### Kokoro / `af_heart`
+
+Authoritative upstream evidence now establishes that the official `hexgrad/Kokoro-82M` repository is marked Apache-2.0, explicitly describes its weights as Apache-licensed and deployable in production, and states that Kokoro was trained exclusively on permissive/non-copyrighted audio data. The official repository contains `voices/af_heart.pt` (SHA-256 `0ab5709b...`) under the same Apache-2.0 model repository and documents `af_heart` in `VOICES.md`. However, the upstream materials inspected do not state a separate per-voice license/provenance grant for `af_heart`, and an upstream GitHub issue asking whether native voice output has a distinct license remains unresolved in the evidence set.
+
+Four-part result:
+1. Code/repository: PASS for permissive use subject to dependency obligations.
+2. Weights/checkpoint: PASS — Apache-2.0 upstream model materials.
+3. Selected voice/reference asset `af_heart`: UNKNOWN — present in the Apache-2.0 repository, but no explicit independent per-voice rights/provenance statement was found.
+4. Commercial generated-output restriction: UNKNOWN for the selected voice path; no prohibition was found, but M6 requires affirmative closure rather than inference from repository metadata.
+
+M6 disposition: `TECHNICAL_ONLY / DISQUALIFIED_FROM_PRODUCTION_QUALIFICATION_PENDING_VOICEPACK_RIGHTS`. Keep its completed runtime samples as technical evidence; do not certify `af_heart` for commercial Factory output. English espeak-ng/phonemizer obligations remain a separate distribution-compliance matter and are not treated as a commercial-use prohibition.
+
+### Chatterbox-Nano / built-in `conds.pt`
+
+Official ResembleAI Chatterbox-Nano model materials are marked MIT and describe the 110M Nano model. The exact official implementation loads Nano through `ChatterboxTurboTTS(..., nano=True)`; when present, the downloaded checkpoint directory also loads a built-in `conds.pt` conditioning asset. The official Hugging Face repositories expose `conds.pt` inside MIT-marked model repositories and document replacing the built-in voice with a user-supplied audio prompt. The inspected authoritative materials do not provide a separate statement identifying the source speaker/recording or granting independent commercial/personality rights for the built-in conditioning voice.
+
+Four-part result:
+1. Code/repository: PASS — MIT.
+2. Nano checkpoint/model: PASS — official Nano model card marked MIT.
+3. Built-in/default conditioning voice `conds.pt`: UNKNOWN — bundled with the model, but separate recording/personality provenance and rights were not affirmatively documented in the inspected official materials.
+4. Commercial generated-output restriction: UNKNOWN for output using the built-in voice; no prohibition was found, but the asset-rights gate is not affirmatively closed.
+
+M6 disposition: `TECHNICAL_ONLY / DISQUALIFIED_FROM_PRODUCTION_QUALIFICATION_PENDING_BUILTIN_VOICE_RIGHTS`. Preserve the completed Nano benchmark as technical evidence. A future production path may re-enter qualification with a Factory-owned or explicitly commercially licensed reference recording, while preserving required upstream provenance/watermarking behavior.
+
+### MOSS-TTS / bundled reference audio
+
+Official OpenMOSS MOSS-TTS documentation states that models in the MOSS-TTS family are Apache-2.0 and the package manifest includes the `assets` tree. Official examples explicitly use bundled/local reference audio from `assets/audio` as well as hosted reference recordings. The inspected authoritative documentation does not provide a separate license/provenance grant for the specific benchmark reference recording `assets/audio/en_2.wav`.
+
+Four-part result:
+1. Code/repository: PASS — Apache-2.0 notices are present in the official implementation.
+2. Model/checkpoint: PASS — official documentation states Apache-2.0 for the MOSS-TTS family.
+3. Benchmark reference recording `assets/audio/en_2.wav`: UNKNOWN — bundled/distributed by upstream, but separate recording/speaker commercial rights were not affirmatively documented.
+4. Commercial generated-output restriction: UNKNOWN for output conditioned on that reference; no prohibition was found, but reference-asset rights are not affirmatively closed.
+
+M6 disposition: `TECHNICAL_ONLY / DISQUALIFIED_FROM_PRODUCTION_QUALIFICATION_PENDING_REFERENCE_AUDIO_RIGHTS`. The existing CPU benchmark remains valid technical evidence; it must not be used as commercial-rights certification. A Factory-owned or explicitly commercially licensed prompt/reference voice is required before production qualification.
+
+### Gate consequence
+
+None of the three local candidates receives commercial-production certification from this audit. This is fail-closed: lack of an explicit prohibition is not converted into an affirmative voice/personality rights grant. Edge remains the reproducible baseline. Kokoro and Chatterbox-Nano may remain in a blind technical listening package only if clearly labelled as evaluation-only; MOSS may remain technical evidence or be omitted from a production-candidate listening set because its tested reference path is not rights-cleared. No production migration is authorized.
