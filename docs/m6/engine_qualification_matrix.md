@@ -1,6 +1,6 @@
 # M6.0 TTS Engine Qualification Matrix
 
-Status: IN_PROGRESS. This document is evidence-first: unknown fields remain UNKNOWN until verified or measured. Production Edge path is unchanged.
+Status: IN_PROGRESS / BLIND_PACKAGE_PREPARATION. PASS/FAIL/UNKNOWN below is evidence-first; subjective listening dimensions remain UNKNOWN until human blind review. Production Edge path is unchanged.
 
 ## Required dimensions
 
@@ -55,3 +55,28 @@ All engines must synthesize the exact same benchmark corpus. Record cold-start t
 Vendor performance claims are evidence for feasibility only, never substitutes for Factory measurements. CPU speed, RAM, cold-start and RTF must be measured on the actual GitHub Actions benchmark environment before a candidate can pass M6.0.
 
 No engine may become production-selected during M6.0. M6.0 ends at HUMAN_REVIEW_REQUIRED after the technical matrix and blind sample package are complete.
+
+
+## Qualification update — 2026-09-19
+
+The frozen 12-case corpus now has complete cryptographically bound full-corpus runtime packages for Edge legacy, Kokoro `af_heart`, and Chatterbox-Nano built-in voice. Subjective quality dimensions (naturalness, intonation, emotionality, pronunciation quality, prosodic appropriateness) remain UNKNOWN until blind human listening; runtime success must not be converted into a quality score.
+
+| Dimension | Edge legacy | Kokoro `af_heart` | Chatterbox-Nano |
+| --- | --- | --- | --- |
+| Frozen corpus completeness | PASS 12/12 | PASS 12/12 | PASS 12/12 |
+| Python automation | PASS | PASS | PASS |
+| GitHub Actions CPU fit | PASS | PASS | PASS |
+| GPU required in measured run | PASS: no GPU | PASS: no GPU | PASS: no GPU |
+| Generation speed | PASS technical; warm RTF 0.065–0.224 across corpus | PASS technical; warm RTF 0.536–0.563 | PASS technical; warm RTF 0.873–1.227 |
+| Source/audio cryptographic binding | PASS | PASS | PASS |
+| Naturalness | UNKNOWN — human blind review required | UNKNOWN — human blind review required | UNKNOWN — human blind review required |
+| English quality | UNKNOWN — human blind review required | UNKNOWN — human blind review required | UNKNOWN — human blind review required |
+| Intonation | UNKNOWN — human blind review required | UNKNOWN — human blind review required | UNKNOWN — human blind review required |
+| Emotionality | UNKNOWN — human blind review required | UNKNOWN — human blind review required | UNKNOWN — human blind review required |
+| Pronunciation stability | UNKNOWN — human blind review required | UNKNOWN — human blind review required | UNKNOWN — human blind review required |
+| Commercial voice/reference rights | Existing production baseline; terms remain separately governed | FAIL for M6 production qualification pending explicit `af_heart` rights | FAIL for M6 production qualification pending explicit built-in `conds.pt` voice rights |
+| Production qualification | Baseline only; no M6 selection made | FAIL-CLOSED pending voicepack rights | FAIL-CLOSED pending built-in voice rights |
+
+MOSS-TTS-Nano remains technical-only and fail-closed for production qualification pending explicit rights for the tested reference audio. Gemini runtime remains blocked by free-tier credential/billing attestation; no paid request is permitted. Neither is silently scored as though equivalent full-corpus listening evidence existed.
+
+A blind package must keep the reviewer-facing artifact free of engine names and place the engine mapping in a separate audit artifact. Every reviewer sample must bind `sample_id`, case, exact frozen source SHA-256 and audio SHA-256. The audit mapping additionally binds engine version/commit and synthesis configuration. Human scores are not yet present, so M6.0 must not advance to M6.1.
