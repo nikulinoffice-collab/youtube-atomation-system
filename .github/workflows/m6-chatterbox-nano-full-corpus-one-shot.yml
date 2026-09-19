@@ -35,8 +35,8 @@ jobs:
           python scripts/m6_frozen_corpus_harness.py verify
           python - <<'PY'
           import inspect
-          from chatterbox.tts import ChatterboxTTS
-          sig=inspect.signature(ChatterboxTTS.from_pretrained)
+          from chatterbox.tts_turbo import ChatterboxTurboTTS
+          sig=inspect.signature(ChatterboxTurboTTS.from_pretrained)
           print(sig)
           if 'nano' not in sig.parameters:
               raise SystemExit('fail closed: upstream API has no nano selector')
@@ -50,7 +50,7 @@ jobs:
           import hashlib, json, subprocess, time
           from pathlib import Path
           import torch, torchaudio
-          from chatterbox.tts import ChatterboxTTS
+          from chatterbox.tts_turbo import ChatterboxTurboTTS
 
           root=Path('.')
           corpus=json.loads((root/'docs/m6/benchmark_corpus.json').read_text())
@@ -60,11 +60,11 @@ jobs:
           if torch.cuda.is_available():
               raise SystemExit('fail closed: GPU unexpectedly available')
           t0=time.perf_counter()
-          model=ChatterboxTTS.from_pretrained(device='cpu', nano=True)
+          model=ChatterboxTurboTTS.from_pretrained(device='cpu', nano=True)
           init=time.perf_counter()-t0
           model_name=type(model).__name__
-          if 'Nano' not in model_name and not getattr(model,'is_nano',False):
-              print('MODEL_CLASS',model_name)
+          if getattr(model,'model_label',None) != 'Nano':
+              raise SystemExit(f'fail closed: expected Nano model_label, got {getattr(model,"model_label",None)!r}')
           sr=int(model.sr)
           summary=[]
           for index,case in enumerate(corpus['cases']):
@@ -91,7 +91,7 @@ jobs:
               ],check=True)
               r=json.loads(rec.read_text())
               summary.append({k:r[k] for k in ('case_id','synthesis_seconds','audio_duration_seconds','rtf','cold_or_warm','audio_sha256')})
-          (out/'summary.json').write_text(json.dumps({'engine_id':'chatterbox_nano','upstream_commit':'5de7a54aa4e5e2baadb0182dde554908b48b85c2','model_class':model_name,'init_seconds':init,'sample_rate':sr,'cpu_only':True,'cuda_available':False,'cases':summary},indent=2,sort_keys=True)+'\n')
+          (out/'summary.json').write_text(json.dumps({'engine_id':'chatterbox_nano','upstream_commit':'5de7a54aa4e5e2baadb0182dde554908b48b85c2','model_class':model_name,'model_label':getattr(model,'model_label',None),'init_seconds':init,'sample_rate':sr,'cpu_only':True,'cuda_available':False,'cases':summary},indent=2,sort_keys=True)+'\n')
           print('MODEL_CLASS',model_name,'INIT_SECONDS',init,'SAMPLE_RATE',sr)
           print(json.dumps(summary,indent=2))
           PY
