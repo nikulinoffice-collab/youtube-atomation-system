@@ -1,0 +1,110 @@
+name: M6 Kokoro Full Corpus One Shot
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - factory-v1-voice-m6
+    paths:
+      - .github/workflows/m6-kokoro-full-corpus-one-shot.yml
+
+permissions:
+  contents: read
+
+jobs:
+  kokoro-frozen-corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: factory-v1-voice-m6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated Kokoro CPU benchmark runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends espeak-ng ffmpeg
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu 'torch==2.6.0' 'torchaudio==2.6.0'
+          python -m pip install --disable-pip-version-check 'kokoro==0.9.4' soundfile psutil
+          python -m pip check
+      - name: Verify frozen corpus and synthesize shadow samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/m6_frozen_corpus_harness.py verify
+          mkdir -p m6-kokoro-full/audio m6-kokoro-full/records
+          /usr/bin/time -v python - <<'PY' 2>m6-kokoro-full/process-time.txt
+          import hashlib, json, time
+          from pathlib import Path
+          import soundfile as sf
+          import torch
+          from kokoro import KPipeline
+
+          root=Path('.')
+          corpus=json.loads((root/'docs/m6/benchmark_corpus.json').read_text(encoding='utf-8'))
+          manifest=json.loads((root/'docs/m6/frozen_corpus_manifest.json').read_text(encoding='utf-8'))
+          expected={x['id']:x['text_sha256'] for x in manifest['cases']}
+          out=root/'m6-kokoro-full'
+          voice='af_heart'
+          speed=1.0
+          pipeline=KPipeline(lang_code='a')
+          summary=[]
+
+          if torch.cuda.is_available():
+              raise SystemExit('fail closed: GPU unexpectedly available; CPU benchmark contract violated')
+
+          for index,case in enumerate(corpus['cases']):
+              cid,text=case['id'],case['text']
+              actual=hashlib.sha256(text.encode('utf-8')).hexdigest()
+              if actual != expected.get(cid):
+                  raise SystemExit(f'source hash mismatch before synthesis: {cid}')
+              t0=time.perf_counter()
+              chunks=list(pipeline(text, voice=voice, speed=speed))
+              elapsed=time.perf_counter()-t0
+              if not chunks:
+                  raise SystemExit(f'no audio generated: {cid}')
+              audio=torch.cat([x.audio.detach().cpu().flatten() for x in chunks]).numpy()
+              wav=out/'audio'/f'{cid}.wav'
+              sf.write(wav,audio,24000,subtype='PCM_16')
+              rec=out/'records'/f'{cid}.json'
+              import subprocess
+              subprocess.run([
+                  'python','scripts/m6_frozen_corpus_harness.py','bind',
+                  '--case-id',cid,'--engine-id','kokoro',
+                  '--engine-version-or-commit','0.9.4',
+                  '--config-json',json.dumps({'voice':voice,'speed':speed,'lang_code':'a','sample_rate':24000,'format':'pcm_s16le_wav','cpu_only':True},sort_keys=True),
+                  '--audio',str(wav),'--synthesis-seconds',str(elapsed),
+                  '--cold-or-warm','cold' if index==0 else 'warm','--output',str(rec)
+              ],check=True)
+              r=json.loads(rec.read_text())
+              summary.append({k:r[k] for k in ('case_id','synthesis_seconds','audio_duration_seconds','rtf','cold_or_warm','audio_sha256')})
+
+          (out/'summary.json').write_text(json.dumps({
+              'engine_id':'kokoro','engine_version':'0.9.4','voice':voice,'speed':speed,
+              'cpu_only':True,'cuda_available':False,'cases':summary
+          },indent=2,sort_keys=True)+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Verify bound records
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          records=list(Path('m6-kokoro-full/records').glob('*.json'))
+          corpus=json.loads(Path('docs/m6/benchmark_corpus.json').read_text())
+          assert len(records)==len(corpus['cases'])==12,(len(records),len(corpus['cases']))
+          for p in records:
+              r=json.loads(p.read_text())
+              assert r['production_changed'] is False
+              assert r['rtf'] > 0 and r['audio_duration_seconds'] > 0
+          print('BOUND_RECORDS=PASS count=12')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m6-kokoro-full-corpus-${{ github.sha }}
+          path: m6-kokoro-full/
+          if-no-files-found: error
+          retention-days: 7
