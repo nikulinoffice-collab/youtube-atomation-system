@@ -49,6 +49,34 @@ def test_invalid_calendar_or_clock_like_values_do_not_claim_date_time_rule():
     assert all(m["rule"] not in {"iso_date","time"} for m in r["mappings"])
     validate(r)
 
+def test_versioned_lexicon_acronyms_are_exact_and_traceable():
+    r=normalize("AI uses the API for TTS.")
+    assert r["spoken_text"] == "A I uses the A P I for T T S."
+    edits=[m for m in r["mappings"] if m["rule"] == "lexicon"]
+    assert [(m["display"],m["spoken"]) for m in edits] == [("AI","A I"),("API","A P I"),("TTS","T T S")]
+    validate(r)
+
+def test_technical_term_uses_longest_lexicon_match_without_nested_tts_edit():
+    r=normalize("Qwen3-TTS is the development engine.")
+    assert r["spoken_text"] == "Qwen three T T S is the development engine."
+    assert len(r["mappings"]) == 1
+    assert r["mappings"][0]["display"] == "Qwen3-TTS"
+    assert r["mappings"][0]["rule"] == "lexicon"
+    validate(r)
+
+def test_proper_noun_identity_entry_does_not_mutate_canonical_or_spoken_text():
+    text="GitHub runs the test."
+    r=normalize(text)
+    assert r["display_text"] == text
+    assert r["spoken_text"] == text
+    validate(r)
+
+def test_lexicon_entries_do_not_match_inside_larger_words():
+    r=normalize("WAITING and RAPID remain ordinary words while AI is expanded.")
+    assert r["spoken_text"] == "WAITING and RAPID remain ordinary words while A I is expanded."
+    assert [m["display"] for m in r["mappings"] if m["rule"] == "lexicon"] == ["AI"]
+    validate(r)
+
 def test_frozen_corpus_is_deterministic_and_valid():
     corpus=json.loads((Path(__file__).parents[1]/"docs/m6/benchmark_corpus.json").read_text())
     texts=[]
