@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "lexicon_version": "m6.1-v1",
+  "language": "en",
+  "entries": [
+    {"display": "AI", "spoken": "A I", "kind": "acronym"},
+    {"display": "TTS", "spoken": "T T S", "kind": "acronym"},
+    {"display": "API", "spoken": "A P I", "kind": "acronym"},
+    {"display": "Qwen3-TTS", "spoken": "Qwen three T T S", "kind": "technical_term"},
+    {"display": "GitHub", "spoken": "GitHub", "kind": "proper_noun"}
+  ]
+}
