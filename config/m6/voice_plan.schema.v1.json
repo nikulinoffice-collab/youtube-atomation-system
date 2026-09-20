@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "m6.voice-plan.v1",
+  "title": "M6 Vendor-Neutral VoicePlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","voice_plan_version","normalizer_version","lexicon_version","lexicon_sha256","display_text","spoken_text","blocks"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "voice_plan_version": {"const": "m6.2-v1"},
+    "normalizer_version": {"type":"string","minLength":1},
+    "lexicon_version": {"type":"string","minLength":1},
+    "lexicon_sha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "display_text": {"type":"string"},
+    "spoken_text": {"type":"string"},
+    "blocks": {
+      "type":"array","minItems":1,
+      "items":{"$ref":"#/$defs/block"}
+    }
+  },
+  "$defs": {
+    "span":{"type":"object","additionalProperties":false,"required":["start","end"],"properties":{"start":{"type":"integer","minimum":0},"end":{"type":"integer","minimum":0}}},
+    "emphasis":{"type":"object","additionalProperties":false,"required":["spoken_span","strength"],"properties":{"spoken_span":{"$ref":"#/$defs/span"},"strength":{"enum":["light","moderate"]}}},
+    "pause":{"type":"object","additionalProperties":false,"required":["after_spoken_offset","ms"],"properties":{"after_spoken_offset":{"type":"integer","minimum":0},"ms":{"type":"integer","minimum":40,"maximum":800}}},
+    "block":{
+      "type":"object","additionalProperties":false,
+      "required":["block_id","role","display_span","spoken_span","target_wpm","rate","pre_pause_ms","post_pause_ms","internal_pauses","intent","emotion","energy","pitch_direction","pitch_range_semitones","intonation_contour","emphasis","pronunciation_refs"],
+      "properties":{
+        "block_id":{"type":"string","pattern":"^vp1-b[0-9]{4}$"},
+        "role":{"enum":["HOOK","QUESTION","CONTRAST","IMPORTANT_FACT","REVEAL","EXPLANATION","TRANSITION","CONCLUSION"]},
+        "display_span":{"$ref":"#/$defs/span"},
+        "spoken_span":{"$ref":"#/$defs/span"},
+        "target_wpm":{"type":"integer","minimum":120,"maximum":210},
+        "rate":{"type":"number","minimum":0.8,"maximum":1.2},
+        "pre_pause_ms":{"type":"integer","minimum":0,"maximum":1200},
+        "post_pause_ms":{"type":"integer","minimum":0,"maximum":1200},
+        "internal_pauses":{"type":"array","items":{"$ref":"#/$defs/pause"}},
+        "intent":{"enum":["engage","ask","contrast","inform","reveal","explain","bridge","close"]},
+        "emotion":{"enum":["neutral","curious","confident","warm","serious"]},
+        "energy":{"type":"number","minimum":0.25,"maximum":0.75},
+        "pitch_direction":{"enum":["level","rise","fall","rise-fall"]},
+        "pitch_range_semitones":{"type":"number","minimum":0,"maximum":4},
+        "intonation_contour":{"enum":["neutral","question-rise","declarative-fall","contrastive","reveal-arc"]},
+        "emphasis":{"type":"array","items":{"$ref":"#/$defs/emphasis"}},
+        "pronunciation_refs":{"type":"array","items":{"type":"string","minLength":1},"uniqueItems":true}
+      }
+    }
+  }
+}
