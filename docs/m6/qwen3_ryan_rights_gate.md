@@ -2,29 +2,50 @@
 
 Date: 2026-09-20
 Selected path: Qwen3-TTS 12Hz 0.6B CustomVoice / English / Ryan.
+Gate decision: CLOSED_FOR_DEVELOPMENT / FAIL_CLOSED_FOR_PUBLISHING.
 
-## Four-part gate
+## Official-source audit
 
-1. Code/repository: PASS. Official QwenLM/Qwen3-TTS repository is Apache-2.0.
-2. Model/checkpoint: PASS. The exact official 0.6B CustomVoice checkpoint revision used for qualification is published as Apache-2.0.
-3. Built-in Ryan voice/personality asset: UNRESOLVED. Official Qwen documentation explicitly lists Ryan as a supported built-in English speaker ("Dynamic male voice with strong rhythmic drive"), so its inclusion in the official model is established. However, the reviewed official materials do not contain a separate Ryan-specific provenance/personality/voice-rights statement.
-4. Commercial generated-output restrictions attributable to Ryan: UNRESOLVED. Apache-2.0 grants broad rights in the licensed Work and the checkpoint is marked Apache-2.0; no additional model-card restriction on commercial output was found. This evidence still does not independently prove third-party personality/voice rights for the Ryan preset.
+1. Code/repository — PASS.
+   The official QwenLM/Qwen3-TTS repository is distributed under Apache License 2.0 (Copyright 2026 Alibaba Cloud).
+
+2. Exact model/checkpoint — PASS.
+   The official Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice checkpoint used by the project is marked Apache-2.0. Frozen model revision: 85e237c12c027371202489a0ec509ded67b5e4b5.
+
+3. Ryan built-in speaker — DEVELOPMENT PASS / PRODUCTION CLEARANCE NOT PROVEN.
+   Ryan is an official built-in English CustomVoice speaker and is therefore valid for the selected technical path. The reviewed official Qwen/Alibaba repository, model card and license materials do not provide a separate Ryan-specific provenance, publicity/personality-rights statement, or an explicit Ryan-specific commercial-use grant.
+
+4. Generated-output/commercial-use restriction — NO MODEL-SPECIFIC PROHIBITION FOUND / RYAN-SPECIFIC CLEARANCE NOT PROVEN.
+   Apache-2.0 provides broad rights for the licensed Work. No additional commercial-output prohibition was found in the reviewed official model materials. This is not treated as affirmative evidence that every possible third-party voice/personality right associated with the Ryan preset is cleared.
+
+## Engineering decision
+
+The rights investigation is considered complete for the current development milestone; absence of Ryan-specific authoritative evidence will not block M6.1–M6.8 engineering work.
+
+Ryan is APPROVED for:
+- local/CI technical development;
+- automated synthesis tests;
+- benchmark and QC work;
+- internal human listening/review;
+- building the vendor-neutral M6 pipeline.
+
+Ryan is NOT YET APPROVED for:
+- public production publishing;
+- monetized YouTube/TikTok output;
+- any external distribution where commercial/personality-rights clearance is required.
+
+Publishing remains fail-closed. Before M6.9 production migration, one of these conditions must be satisfied:
+A. authoritative Ryan-specific commercial/personality-rights evidence is obtained; or
+B. the production speaker is replaced by a Factory-owned or explicitly commercially licensed male voice/reference path and passes the M6.8 quality gate.
 
 ## Evidence boundary
 
 Official repository: https://github.com/QwenLM/Qwen3-TTS
-Official repository license: Apache-2.0.
-Official checkpoint: Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice, Apache-2.0.
-Official documentation lists Ryan as a supported built-in English speaker.
+Repository license: Apache-2.0.
+Official checkpoint: Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice.
+Checkpoint license: Apache-2.0.
+Frozen project config: config/m6/qwen3_ryan_frozen.json.
 
-The audit found no authoritative Ryan-specific rights statement beyond inclusion in the Apache-2.0-distributed model. Absence of an additional restriction is not treated as affirmative personality-rights clearance.
+This is a conservative engineering rights classification, not legal advice.
 
-## Disposition
-
-ENGINE_QUALITY_SELECTED / RYAN_RIGHTS_EVIDENCE_INCOMPLETE / FAIL_CLOSED_FOR_PUBLISHING.
-
-Ryan is frozen for technical development because it is the human-selected quality target. Publishing with Ryan is not automatically enabled. The project must obtain authoritative Ryan-specific clearance, or replace the production speaker path with a Factory-owned/explicitly commercially licensed male reference voice while preserving Qwen3-TTS as the selected engine.
-
-This is a conservative engineering rights gate, not legal advice.
-
-Production Edge remains unchanged. No paid service, billing, secrets or publishing are authorized by this document.
+Production Edge remains unchanged. No paid service, billing, secrets or publishing are authorized by this gate.
