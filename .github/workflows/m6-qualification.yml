@@ -6,20 +6,23 @@ on:
       milestone:
         description: 'M6 milestone test suite'
         required: true
-        default: 'm6.2'
+        default: 'm6.3'
         type: choice
         options:
           - m6.1
           - m6.2
+          - m6.3
   push:
     branches:
       - factory-v1-voice-m6
     paths:
       - 'scripts/m6_voice_script.py'
       - 'scripts/m6_voice_plan.py'
+      - 'scripts/m6_voice_plan_validator.py'
       - 'config/m6/**'
       - 'tests/test_m6_voice_script.py'
       - 'tests/test_m6_voice_plan.py'
+      - 'tests/test_m6_voice_plan_validator.py'
       - '.github/workflows/m6-qualification.yml'
 
 permissions:
@@ -39,7 +42,7 @@ jobs:
         run: python -m pip install pytest
       - name: Record qualification identity
         run: |
-          echo "M6 milestone: ${{ inputs.milestone || 'm6.2' }}"
+          echo "M6 milestone: ${{ inputs.milestone || 'm6.3' }}"
           echo "GITHUB_SHA=$GITHUB_SHA"
           git rev-parse HEAD
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -47,5 +50,8 @@ jobs:
         if: ${{ inputs.milestone == 'm6.1' }}
         run: python -m pytest -q tests/test_m6_voice_script.py
       - name: Qualify M6.2 and M6.1 regression
-        if: ${{ (inputs.milestone || 'm6.2') == 'm6.2' }}
+        if: ${{ inputs.milestone == 'm6.2' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py
+      - name: Qualify M6.3 with M6.1-M6.2 regressions
+        if: ${{ (inputs.milestone || 'm6.3') == 'm6.3' }}
+        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py
