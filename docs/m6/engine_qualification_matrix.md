@@ -1,6 +1,6 @@
 # M6.0 TTS Engine Qualification Matrix
 
-Status: IN_PROGRESS / BLIND_PACKAGE_PREPARATION. PASS/FAIL/UNKNOWN below is evidence-first; subjective listening dimensions remain UNKNOWN until human blind review. Production Edge path is unchanged.
+Status: M6.0_REOPENED / QUALITY_TARGET_NOT_MET. Human review found improved intonation but persistent robotic/emotionally detached voice quality. PASS/FAIL/UNKNOWN below remains evidence-first. Production Edge path is unchanged.
 
 ## Required dimensions
 
@@ -80,3 +80,10 @@ The frozen 12-case corpus now has complete cryptographically bound full-corpus r
 MOSS-TTS-Nano remains technical-only and fail-closed for production qualification pending explicit rights for the tested reference audio. Gemini runtime remains blocked by free-tier credential/billing attestation; no paid request is permitted. Neither is silently scored as though equivalent full-corpus listening evidence existed.
 
 A blind package must keep the reviewer-facing artifact free of engine names and place the engine mapping in a separate audit artifact. Every reviewer sample must bind `sample_id`, case, exact frozen source SHA-256 and audio SHA-256. The audit mapping additionally binds engine version/commit and synthesis configuration. Human scores are not yet present, so M6.0 must not advance to M6.1.
+
+
+## Human review gate result — 2026-09-20
+
+The human gate did not approve M6.0. Listening feedback: intonation improved, but the male voice remains noticeably robotic and emotionally detached. Therefore naturalness/human-likeness is FAIL for the reviewed production-quality target and M6.1 remains blocked.
+
+Targeted 2026 research adds Qwen3-TTS, IndexTTS-2.5 and CosyVoice3 to the research screen. F5-TTS is fail-closed for the Factory's zero-cost commercial constraint because official pretrained weights are CC-BY-NC. Fish Speech/Fish Audio S2 is fail-closed because its March 2026 research license requires a separate commercial license. No model is promoted to production by research claims alone.
