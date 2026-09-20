@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "milestone": "M6.0",
+  "engine": "qwen3_tts",
+  "source_repository": "https://github.com/QwenLM/Qwen3-TTS",
+  "source_commit": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "package_version": "0.1.1",
+  "model": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "language": "English",
+  "speaker": "Aiden",
+  "instruction": "Natural documentary narration. Human, conversational, restrained emotion. Avoid announcer delivery and exaggerated acting.",
+  "runtime": {
+    "device": "cpu",
+    "dtype": "float32",
+    "gpu_required": false
+  },
+  "generation": {
+    "do_sample": true,
+    "repetition_penalty": 1.05,
+    "temperature": 0.9,
+    "top_p": 1.0,
+    "top_k": 50,
+    "subtalker_dosample": true,
+    "subtalker_temperature": 0.9,
+    "subtalker_top_p": 1.0,
+    "subtalker_top_k": 50,
+    "max_new_tokens": 8192
+  },
+  "human_selected": true,
+  "production_enabled": false,
+  "paid_services": false
+}
