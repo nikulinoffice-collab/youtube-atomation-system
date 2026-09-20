@@ -27,9 +27,30 @@ def test_compact_currency_precedes_plain_number_rules():
     assert r["spoken_text"] == "The project cost one point five million dollars."
     assert len(r["mappings"]) == 1
 
+def test_iso_date_is_single_traceable_edit():
+    r=normalize("Launch is 2026-09-20.")
+    assert r["spoken_text"] == "Launch is September twentieth twenty twenty six."
+    assert len(r["mappings"]) == 1
+    assert r["mappings"][0]["rule"] == "iso_date"
+    validate(r)
+
+def test_time_normalization_with_and_without_meridiem():
+    assert normalize("Meet at 9:05 AM.")["spoken_text"] == "Meet at nine oh five A M."
+    assert normalize("Render at 14:30.")["spoken_text"] == "Render at fourteen thirty."
+
+def test_units_precede_plain_number_rules():
+    r=normalize("The line is 38.5 km and latency is 12 ms at 24 kHz.")
+    assert r["spoken_text"] == "The line is thirty eight point five kilometers and latency is twelve milliseconds at twenty four kilohertz."
+    assert [m["rule"] for m in r["mappings"]] == ["unit","unit","unit"]
+    validate(r)
+
+def test_invalid_calendar_or_clock_like_values_do_not_claim_date_time_rule():
+    r=normalize("Keep 2026-13-40 and 25:99 literal except generic numeric normalization.")
+    assert all(m["rule"] not in {"iso_date","time"} for m in r["mappings"])
+    validate(r)
+
 def test_frozen_corpus_is_deterministic_and_valid():
     corpus=json.loads((Path(__file__).parents[1]/"docs/m6/benchmark_corpus.json").read_text())
-    # Accept either a list or a dict containing case lists; recursively collect text fields.
     texts=[]
     def walk(x):
         if isinstance(x,dict):
