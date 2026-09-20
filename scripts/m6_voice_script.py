@@ -70,9 +70,10 @@ def load_lexicon(path: Path = LEXICON_PATH):
 
 def normalize(display_text: str, lexicon_path: Path = LEXICON_PATH) -> dict:
     lex, lex_hash=load_lexicon(lexicon_path)
+    # Longest lexicon entry wins before shorter nested terms (e.g. Qwen3-TTS before TTS).
     rules=[]
-    for e in lex["entries"]:
-        rules.append((re.compile(r"(?<!\w)"+re.escape(e["display"])+r"(?!\w)"), lambda m,e=e:e["spoken"], "lexicon:"+e["kind"]))
+    for e in sorted(lex["entries"], key=lambda item: len(item["display"]), reverse=True):
+        rules.append((re.compile(r"(?<!\w)"+re.escape(e["display"])+r"(?!\w)"), lambda m,e=e:e["spoken"], "lexicon"))
     rules += [
       (re.compile(r"\b(20[0-9]{2})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\b"), iso_date_words, "iso_date"),
       (re.compile(r"\b([01]?[0-9]|2[0-3]):([0-5][0-9])(?:\s*([ap]\.?m\.?))?\b", re.I), time_words, "time"),
