@@ -27,9 +27,12 @@ jobs:
           python-version: '3.11'
       - name: Install pinned runtime dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg sox
           python -m pip install --upgrade pip
           python -m pip install 'qwen-tts==0.1.1' 'whisperx==3.8.6' soundfile
           ffmpeg -version | head -1 | tee -a runtime-identity.txt
+          sox --version | tee -a runtime-identity.txt
           python - <<'PY' | tee -a runtime-identity.txt
           import platform, torch
           from importlib.metadata import version
@@ -49,7 +52,7 @@ jobs:
           import whisperx
           from qwen_tts import Qwen3TTSModel
           out=Path('m6-8-review'); out.mkdir()
-          sentences=[('HOOK','AI voice is changing faster than most people realize.'),('QUESTION','But can a synthetic narrator actually sound intentional?'),('CONTRAST','Raw speech can be clear, while still feeling flat and mechanical.'),('IMPORTANT_FACT','This pipeline controls eight semantic roles across one continuous short.'),('REVEAL','The key is not louder processing; it is better direction before synthesis.'),('EXPLANATION','Each block carries pacing, pause, emphasis, pitch, energy, and pronunciation intent.'),('TRANSITION','Now those decisions stay linked to the exact words and timing.'),('CONCLUSION','The final judgment still belongs to a human listener, not an automatic score.')]
+          sentences=[('HOOK','AI voice is changing faster than most people realize.'),('QUESTION','Can a synthetic narrator sound intentional?'),('CONTRAST','Clear speech can still feel flat and mechanical.'),('IMPORTANT_FACT','This pipeline directs eight semantic roles in one short.'),('REVEAL','The key is better direction before synthesis.'),('EXPLANATION','Each block carries pacing, emphasis, pitch, energy, and pronunciation intent.'),('TRANSITION','Those decisions stay linked to exact words and timing.'),('CONCLUSION','The final judgment still belongs to a human listener.')]
           text=' '.join(s for _,s in sentences); roles=[r for r,_ in sentences]
           blocks=[]; cursor=0
           for i,(role,s) in enumerate(sentences):
