@@ -8,7 +8,7 @@ on:
         required: true
         default: 'm6.8'
         type: choice
-        options: [m6.1, m6.2, m6.3, m6.4, m6.5, m6.6, m6.7, m6.8]
+        options: [m6.1, m6.2, m6.3, m6.4, m6.5, m6.6, m6.7, m6.8, m6.9]
   push:
     branches: [factory-v1-voice-m6]
     paths:
@@ -60,3 +60,7 @@ jobs:
       - name: Qualify M6.8 QC/review package with M6.1-M6.7 regressions
         if: ${{ (inputs.milestone || 'm6.8') == 'm6.8' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py
+
+      - name: Qualify M6.9 production migration gate with M6.1-M6.8 regressions
+        if: ${{ inputs.milestone == 'm6.9' }}
+        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py
