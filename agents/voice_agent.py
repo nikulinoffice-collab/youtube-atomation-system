@@ -24,6 +24,10 @@ import sys
 import unicodedata
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import edge_tts
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -290,10 +294,24 @@ def main():
     print(f"   Backend: {backend}")
 
     if backend == "m6-ryan":
-        raise SystemExit(
-            "M6_9_RYAN_RUNTIME_REQUIRED: production Ryan routing is fail-closed until "
-            "the runtime canary adapter writes the production-compatible timeline."
+        from scripts.m6_production_ryan import synthesize
+        result = synthesize(script_text, voice_path.with_suffix(".wav"))
+        # Runtime alignment is mandatory; never manufacture timings from synthesis duration.
+        alignment_path = OUTPUT_DIR / f"m6_alignment_{timestamp}.json"
+        if not alignment_path.exists():
+            raise SystemExit(
+                "M6_9_ALIGNMENT_REQUIRED: Ryan synthesis completed but a real WhisperX "
+                "alignment is required before production timeline creation."
+            )
+        from scripts.m6_production_timeline import build_production_timeline
+        aligned = json.loads(alignment_path.read_text(encoding="utf-8"))
+        timeline = build_production_timeline(
+            script_text, aligned["word_timings"], result["duration_s"], voice="Ryan"
         )
+        timeline_path.write_text(json.dumps(timeline, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"✅ Ryan WAV saved: {voice_path.with_suffix('.wav')}")
+        print(f"✅ Narration timeline saved: {timeline_path}")
+        return
 
     print(f"   Voice: {VOICE}  |  Rate: {RATE}")
     boundaries = asyncio.run(generate_voice_and_boundaries(script_text, voice_path))
