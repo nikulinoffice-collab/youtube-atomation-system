@@ -6,42 +6,18 @@ on:
       milestone:
         description: 'M6 milestone test suite'
         required: true
-        default: 'm6.7'
+        default: 'm6.8'
         type: choice
-        options:
-          - m6.1
-          - m6.2
-          - m6.3
-          - m6.4
-          - m6.5
-          - m6.6
-          - m6.7
+        options: [m6.1, m6.2, m6.3, m6.4, m6.5, m6.6, m6.7, m6.8]
   push:
-    branches:
-      - factory-v1-voice-m6
+    branches: [factory-v1-voice-m6]
     paths:
-      - 'scripts/m6_voice_script.py'
-      - 'scripts/m6_voice_plan.py'
-      - 'scripts/m6_voice_plan_validator.py'
-      - 'scripts/m6_tts_adapter.py'
-      - 'scripts/m6_qwen3_adapter.py'
-      - 'scripts/m6_block_renderer.py'
-      - 'scripts/m6_mastering.py'
-      - 'scripts/m6_alignment.py'
+      - 'scripts/m6_*.py'
       - 'config/m6/**'
-      - 'tests/test_m6_voice_script.py'
-      - 'tests/test_m6_voice_plan.py'
-      - 'tests/test_m6_voice_plan_validator.py'
-      - 'tests/test_m6_tts_adapter.py'
-      - 'tests/test_m6_qwen3_adapter.py'
-      - 'tests/test_m6_block_renderer.py'
-      - 'tests/test_m6_mastering.py'
-      - 'tests/test_m6_alignment.py'
+      - 'tests/test_m6_*.py'
       - '.github/workflows/m6-qualification.yml'
-
 permissions:
   contents: read
-
 jobs:
   qualify:
     runs-on: ubuntu-24.04
@@ -56,7 +32,7 @@ jobs:
         run: python -m pip install pytest
       - name: Record qualification identity
         run: |
-          echo "M6 milestone: ${{ inputs.milestone || 'm6.7' }}"
+          echo "M6 milestone: ${{ inputs.milestone || 'm6.8' }}"
           echo "GITHUB_SHA=$GITHUB_SHA"
           git rev-parse HEAD
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -69,15 +45,18 @@ jobs:
       - name: Qualify M6.3 with M6.1-M6.2 regressions
         if: ${{ inputs.milestone == 'm6.3' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py
-      - name: Qualify M6.4 Qwen3/Ryan adapter with M6.1-M6.3 regressions
+      - name: Qualify M6.4 with M6.1-M6.3 regressions
         if: ${{ inputs.milestone == 'm6.4' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py
-      - name: Qualify M6.5 block rendering with M6.1-M6.4 regressions
+      - name: Qualify M6.5 with M6.1-M6.4 regressions
         if: ${{ inputs.milestone == 'm6.5' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py
-      - name: Qualify M6.6 restrained mastering with M6.1-M6.5 regressions
+      - name: Qualify M6.6 with M6.1-M6.5 regressions
         if: ${{ inputs.milestone == 'm6.6' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py
-      - name: Qualify M6.7 canonical alignment with M6.1-M6.6 regressions
-        if: ${{ (inputs.milestone || 'm6.7') == 'm6.7' }}
+      - name: Qualify M6.7 with M6.1-M6.6 regressions
+        if: ${{ inputs.milestone == 'm6.7' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py
+      - name: Qualify M6.8 QC with M6.1-M6.7 regressions
+        if: ${{ (inputs.milestone || 'm6.8') == 'm6.8' }}
+        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py
