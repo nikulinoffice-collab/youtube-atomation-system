@@ -6,7 +6,7 @@ on:
       milestone:
         description: 'M6 milestone test suite'
         required: true
-        default: 'm6.5'
+        default: 'm6.6'
         type: choice
         options:
           - m6.1
@@ -14,6 +14,7 @@ on:
           - m6.3
           - m6.4
           - m6.5
+          - m6.6
   push:
     branches:
       - factory-v1-voice-m6
@@ -24,6 +25,7 @@ on:
       - 'scripts/m6_tts_adapter.py'
       - 'scripts/m6_qwen3_adapter.py'
       - 'scripts/m6_block_renderer.py'
+      - 'scripts/m6_mastering.py'
       - 'config/m6/**'
       - 'tests/test_m6_voice_script.py'
       - 'tests/test_m6_voice_plan.py'
@@ -31,6 +33,7 @@ on:
       - 'tests/test_m6_tts_adapter.py'
       - 'tests/test_m6_qwen3_adapter.py'
       - 'tests/test_m6_block_renderer.py'
+      - 'tests/test_m6_mastering.py'
       - '.github/workflows/m6-qualification.yml'
 
 permissions:
@@ -50,7 +53,7 @@ jobs:
         run: python -m pip install pytest
       - name: Record qualification identity
         run: |
-          echo "M6 milestone: ${{ inputs.milestone || 'm6.5' }}"
+          echo "M6 milestone: ${{ inputs.milestone || 'm6.6' }}"
           echo "GITHUB_SHA=$GITHUB_SHA"
           git rev-parse HEAD
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -67,5 +70,8 @@ jobs:
         if: ${{ inputs.milestone == 'm6.4' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py
       - name: Qualify M6.5 block rendering with M6.1-M6.4 regressions
-        if: ${{ (inputs.milestone || 'm6.5') == 'm6.5' }}
+        if: ${{ inputs.milestone == 'm6.5' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py
+      - name: Qualify M6.6 restrained mastering with M6.1-M6.5 regressions
+        if: ${{ (inputs.milestone || 'm6.6') == 'm6.6' }}
+        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py
