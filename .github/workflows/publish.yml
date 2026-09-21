@@ -65,6 +65,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          FACTORY_VOICE_BACKEND: m6-ryan
         run: |
           python script_agent.py
           python voice_agent.py
