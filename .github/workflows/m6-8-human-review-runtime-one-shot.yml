@@ -1,6 +1,9 @@
 name: M6.8 Human Review Runtime One-Shot
 
 on:
+  push:
+    branches: [factory-v1-voice-m6]
+    paths: [.github/workflows/m6-8-human-review-runtime-one-shot.yml]
   workflow_dispatch:
 
 permissions:
@@ -28,7 +31,7 @@ jobs:
           python -m pip install 'qwen-tts==0.1.1' 'whisperx==3.8.6' soundfile
           ffmpeg -version | head -1 | tee -a runtime-identity.txt
           python - <<'PY' | tee -a runtime-identity.txt
-          import platform, torch, whisperx
+          import platform, torch
           from importlib.metadata import version
           print('python='+platform.python_version())
           print('torch='+torch.__version__)
@@ -38,84 +41,49 @@ jobs:
       - name: Synthesize complete directed Short and build review evidence
         run: |
           /usr/bin/time -v -o resource-usage.txt python - <<'PY'
-          import hashlib, json, time, wave
+          import hashlib, json, time
           from pathlib import Path
           import numpy as np
           import soundfile as sf
           import torch
           import whisperx
           from qwen_tts import Qwen3TTSModel
-
           out=Path('m6-8-review'); out.mkdir()
-          sentences=[
-            ('HOOK','AI voice is changing faster than most people realize.'),
-            ('QUESTION','But can a synthetic narrator actually sound intentional?'),
-            ('CONTRAST','Raw speech can be clear, while still feeling flat and mechanical.'),
-            ('IMPORTANT_FACT','This pipeline controls eight semantic roles across one continuous short.'),
-            ('REVEAL','The key is not louder processing; it is better direction before synthesis.'),
-            ('EXPLANATION','Each block carries pacing, pause, emphasis, pitch, energy, and pronunciation intent.'),
-            ('TRANSITION','Now those decisions stay linked to the exact words and timing.'),
-            ('CONCLUSION','The final judgment still belongs to a human listener, not an automatic score.'),
-          ]
-          text=' '.join(s for _,s in sentences)
-          roles=[r for r,_ in sentences]
+          sentences=[('HOOK','AI voice is changing faster than most people realize.'),('QUESTION','But can a synthetic narrator actually sound intentional?'),('CONTRAST','Raw speech can be clear, while still feeling flat and mechanical.'),('IMPORTANT_FACT','This pipeline controls eight semantic roles across one continuous short.'),('REVEAL','The key is not louder processing; it is better direction before synthesis.'),('EXPLANATION','Each block carries pacing, pause, emphasis, pitch, energy, and pronunciation intent.'),('TRANSITION','Now those decisions stay linked to the exact words and timing.'),('CONCLUSION','The final judgment still belongs to a human listener, not an automatic score.')]
+          text=' '.join(s for _,s in sentences); roles=[r for r,_ in sentences]
           blocks=[]; cursor=0
           for i,(role,s) in enumerate(sentences):
             start=text.index(s,cursor); end=start+len(s); cursor=end
             blocks.append({'block_id':f'review-b{i+1:04d}','role':role,'spoken_span':{'start':start,'end':end},'display_span':{'start':start,'end':end}})
           plan={'version':'m6.review.voiceplan.v1','schema_version':1,'spoken_text':text,'display_text':text,'blocks':blocks}
           (out/'voice_plan.json').write_text(json.dumps(plan,indent=2)+'\n')
-
-          model_id='Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice'
-          model_revision='85e237c12c027371202489a0ec509ded67b5e4b5'
-          t0=time.perf_counter()
-          model=Qwen3TTSModel.from_pretrained(model_id, revision=model_revision, device_map='cpu', dtype=torch.float32)
-          load_s=time.perf_counter()-t0
+          model_id='Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice'; model_revision='85e237c12c027371202489a0ec509ded67b5e4b5'
+          t0=time.perf_counter(); model=Qwen3TTSModel.from_pretrained(model_id,revision=model_revision,device_map='cpu',dtype=torch.float32); load_s=time.perf_counter()-t0
           instruct='Natural documentary narration. Human, conversational, restrained emotion. Use clear semantic emphasis, controlled pacing, natural pauses, and varied but subtle sentence contours. Avoid announcer delivery and exaggerated acting.'
-          t0=time.perf_counter()
-          wavs,sr=model.generate_custom_voice(text=text,language='English',speaker='Ryan',instruct=instruct,do_sample=True,repetition_penalty=1.05,temperature=0.9,top_p=1.0,top_k=50,max_new_tokens=8192)
-          synth_s=time.perf_counter()-t0
-          audio=np.asarray(wavs[0],dtype=np.float32)
-          sf.write(out/'complete_short_unmastered.wav',audio,sr,subtype='PCM_16')
-          duration=len(audio)/sr
-          if not 25.0 <= duration <= 35.0:
-            raise SystemExit(f'complete Short duration outside 25-35s: {duration:.3f}s')
+          t0=time.perf_counter(); wavs,sr=model.generate_custom_voice(text=text,language='English',speaker='Ryan',instruct=instruct,do_sample=True,repetition_penalty=1.05,temperature=0.9,top_p=1.0,top_k=50,max_new_tokens=8192); synth_s=time.perf_counter()-t0
+          audio=np.asarray(wavs[0],dtype=np.float32); sf.write(out/'complete_short_unmastered.wav',audio,sr,subtype='PCM_16'); duration=len(audio)/sr
+          if not 25.0 <= duration <= 35.0: raise SystemExit(f'complete Short duration outside 25-35s: {duration:.3f}s')
           audio_sha=hashlib.sha256((out/'complete_short_unmastered.wav').read_bytes()).hexdigest()
-
-          # Real CPU forced alignment; canonical span identity remains in VoicePlan.
-          device='cpu'; t0=time.perf_counter()
-          align_model,metadata=whisperx.load_align_model(language_code='en',device=device)
-          align_load_s=time.perf_counter()-t0
-          t0=time.perf_counter()
-          result=whisperx.align([{'text':text,'start':0.0,'end':duration}],align_model,metadata,str(out/'complete_short_unmastered.wav'),device,return_char_alignments=False)
-          align_s=time.perf_counter()-t0
+          t0=time.perf_counter(); align_model,metadata=whisperx.load_align_model(language_code='en',device='cpu'); align_load_s=time.perf_counter()-t0
+          t0=time.perf_counter(); result=whisperx.align([{'text':text,'start':0.0,'end':duration}],align_model,metadata,str(out/'complete_short_unmastered.wav'),'cpu',return_char_alignments=False); align_s=time.perf_counter()-t0
           observed=result.get('word_segments') or []
           if not observed: raise SystemExit('forced alignment returned no words')
           word_timings=[]
-          for i,w in enumerate(observed):
+          for w in observed:
             if 'start' not in w or 'end' not in w: continue
-            midpoint=(float(w['start'])+float(w['end']))/2
-            # Assign acoustic word to the block whose proportional time window contains it.
-            bi=min(len(blocks)-1,int(midpoint/duration*len(blocks)))
+            midpoint=(float(w['start'])+float(w['end']))/2; bi=min(len(blocks)-1,int(midpoint/duration*len(blocks)))
             word_timings.append({'word':w.get('word','').strip(),'start_s':float(w['start']),'end_s':float(w['end']),'confidence':float(w.get('score',0.0)),'block_id':blocks[bi]['block_id']})
           if not word_timings: raise SystemExit('no timed aligned words')
-          # Preserve monotonic acoustic timings; package is for human review, not canonical remapping certification.
           alignment={'version':'m6.review.alignment.runtime.v1','word_timings':word_timings,'coverage':{'expected_words':len(word_timings),'aligned_words':len(word_timings)},'method':'whisperx-3.8.6-cpu','canonical_mapping_note':'VoicePlan owns canonical display/spoken spans; runtime words are acoustic observations.'}
           (out/'alignment.json').write_text(json.dumps(alignment,indent=2)+'\n')
-
-          abs_audio=np.abs(audio)
-          clipping=float(np.mean(abs_audio>=0.999))
-          silence=float(np.mean(abs_audio<0.01))
-          # Runtime screening metrics. Pitch/energy are signals, never naturalness proof.
-          rms=np.sqrt(np.maximum(1e-12,np.convolve(audio.astype(np.float64)**2,np.ones(1200)/1200,mode='valid')[::1200]))
-          energy_db=20*np.log10(np.maximum(rms,1e-8)); energy_range=float(np.percentile(energy_db,95)-np.percentile(energy_db,5))
+          abs_audio=np.abs(audio); clipping=float(np.mean(abs_audio>=0.999)); silence=float(np.mean(abs_audio<0.01))
+          rms=np.sqrt(np.maximum(1e-12,np.convolve(audio.astype(np.float64)**2,np.ones(1200)/1200,mode='valid')[::1200])); energy_db=20*np.log10(np.maximum(rms,1e-8)); energy_range=float(np.percentile(energy_db,95)-np.percentile(energy_db,5))
           qc={'version':'m6.qc.runtime-review.v1','status':'HUMAN_REVIEW_REQUIRED_M6_8','screening_only':True,'naturalness_claimed':False,'production_migration_permitted':False,'metrics':{'duration_s':duration,'spoken_words':len(word_timings),'wpm':len(word_timings)/duration*60,'silence_ratio':silence,'clipping_ratio':clipping,'mean_alignment_confidence':sum(w['confidence'] for w in word_timings)/len(word_timings),'energy_dynamic_range_db':energy_range},'audit':{'audio_sha256':audio_sha,'block_ids':[b['block_id'] for b in blocks]}}
           if clipping>0.001 or silence>0.45: raise SystemExit('audio failed clipping/silence screen')
           (out/'qc.json').write_text(json.dumps(qc,indent=2)+'\n')
           cases=[{'case_id':f'role-{r.lower()}','role':r,'block_id':b['block_id']} for r,b in zip(roles,blocks)]
           manifest={'version':'m6.review-package.runtime.v1','status':'HUMAN_REVIEW_REQUIRED_M6_8','naturalness_claimed':False,'production_migration_permitted':False,'m6_9_autostart_permitted':False,'audio':{'path':'complete_short_unmastered.wav','sha256':audio_sha,'duration_s':duration,'sample_rate_hz':sr},'runtime':{'tested_sha':__import__('os').environ['GITHUB_SHA'],'device':'cpu','model_id':model_id,'model_revision':model_revision,'speaker':'Ryan','language':'English','model_load_s':load_s,'synthesis_s':synth_s,'synthesis_rtf':synth_s/duration,'alignment_load_s':align_load_s,'alignment_s':align_s,'alignment_rtf':align_s/duration},'representative_cases':cases,'human_review':{'required':True,'criteria':['speaker/config continuity','pronunciation','semantic emphasis','question/reveal contour','controlled pacing and pauses','restrained emotion','overall naturalness']}}
-          (out/'review_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-          print(json.dumps(manifest,indent=2))
+          (out/'review_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n'); print(json.dumps(manifest,indent=2))
           PY
       - name: Record package hashes
         run: |
