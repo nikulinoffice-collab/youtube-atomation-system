@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.m6_voice_plan import build_voice_plan
+from scripts.m6_voice_plan import generate_voice_plan
 from scripts.m6_tts_adapter import SynthesisRequest, SynthesisResult, TTSAdapter, TTSAdapterError
 from scripts.m6_voice_script import normalize
 
@@ -39,7 +39,7 @@ class FakeAdapter(TTSAdapter):
 
 
 def plan(text="AI changed the result."):
-    return build_voice_plan(normalize(text))
+    return generate_voice_plan(normalize(text))
 
 
 def request(p=None, path=Path("voice.wav"), voice="test-voice"):
