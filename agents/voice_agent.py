@@ -27,8 +27,9 @@ from pathlib import Path
 import edge_tts
 
 OUTPUT_DIR = Path(__file__).parent / "output"
-VOICE = "en-US-GuyNeural"
+VOICE = "en-US-GuyNeural"  # rollback voice; M6.9 Ryan path is selected explicitly
 RATE = "+0%"
+VOICE_BACKEND = "edge"
 TICKS_PER_SECOND = 10_000_000
 MAX_TRAILING_AUDIO_SECONDS = 1.5
 LEXICAL_RE = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
@@ -242,6 +243,14 @@ def validate_timeline(timeline: dict) -> None:
         raise ValueError("Timeline lexical units no longer reconstruct canonical narration exactly.")
 
 
+def selected_backend() -> str:
+    import os
+    backend = os.environ.get("FACTORY_VOICE_BACKEND", VOICE_BACKEND).strip().lower()
+    if backend not in {"edge", "m6-ryan"}:
+        raise ValueError(f"Unsupported FACTORY_VOICE_BACKEND: {backend}")
+    return backend
+
+
 async def generate_voice_and_boundaries(text: str, audio_path: Path) -> list[dict]:
     communicate = edge_tts.Communicate(text, voice=VOICE, rate=RATE, boundary="WordBoundary")
     boundaries: list[dict] = []
@@ -276,9 +285,17 @@ def main():
     voice_path = OUTPUT_DIR / f"voice_{timestamp}.mp3"
     timeline_path = OUTPUT_DIR / f"narration_timeline_{timestamp}.json"
 
+    backend = selected_backend()
     print(f"🗣️  Generating voice for: {data['title']}")
-    print(f"   Voice: {VOICE}  |  Rate: {RATE}")
+    print(f"   Backend: {backend}")
 
+    if backend == "m6-ryan":
+        raise SystemExit(
+            "M6_9_RYAN_RUNTIME_REQUIRED: production Ryan routing is fail-closed until "
+            "the runtime canary adapter writes the production-compatible timeline."
+        )
+
+    print(f"   Voice: {VOICE}  |  Rate: {RATE}")
     boundaries = asyncio.run(generate_voice_and_boundaries(script_text, voice_path))
     words = attach_canonical_tokens(script_text, boundaries)
     speech_end = words[-1]["end"] if words else 0.0
