@@ -1,0 +1,76 @@
+name: M6.9 Ryan Production Canary
+
+on:
+  push:
+    branches: [factory-v1-voice-m6]
+    paths:
+      - ".github/workflows/m6-9-production-canary.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install pytest numpy torch qwen-tts==0.1.1 whisperx==3.8.6
+      - name: Verify exact revision
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Run M6.9 regression
+        run: |
+          pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py tests/test_m6_production_alignment.py
+      - name: Real Ryan production-path canary
+        env:
+          FACTORY_VOICE_BACKEND: m6-ryan
+        run: |
+          mkdir -p agents/output
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("agents/output/script_9999999999.json")
+          p.write_text(json.dumps({"title":"M6.9 production canary","script":"A quiet breakthrough can change everything. In 2026, the system asks one question: can a synthetic voice sound genuinely human? The key is controlled pacing, restrained emphasis, and natural pauses. Now the same Ryan voice moves through the real production path. This canary checks the complete chain before the routing switch."}),encoding="utf-8")
+          PY
+          python agents/voice_agent.py
+          python agents/captions_agent.py
+          test -s agents/output/voice_9999999999.wav
+          test -s agents/output/m6_alignment_9999999999.json
+          test -s agents/output/narration_timeline_9999999999.json
+          test -s agents/output/captions_9999999999.srt
+          python - <<'PY'
+          import json,wave
+          from pathlib import Path
+          t=json.loads(Path("agents/output/narration_timeline_9999999999.json").read_text())
+          a=json.loads(Path("agents/output/m6_alignment_9999999999.json").read_text())
+          assert t["voice"]=="Ryan"
+          assert t["source"]=="m6.9-qwen3-ryan-whisperx"
+          assert a["coverage"]["expected_words"]==a["coverage"]["aligned_words"]
+          with wave.open("agents/output/voice_9999999999.wav","rb") as w:
+              duration=w.getnframes()/w.getframerate()
+              assert w.getframerate()==24000 and w.getnchannels()==1
+          assert 0 < t["speech_end"] <= duration + .02
+          print(json.dumps({"status":"PASS","voice":"Ryan","duration_s":duration,"aligned_words":a["coverage"]["aligned_words"]}))
+          PY
+      - name: Upload canary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m6-9-production-canary-${{ github.sha }}
+          path: |
+            agents/output/voice_9999999999.wav
+            agents/output/m6_alignment_9999999999.json
+            agents/output/narration_timeline_9999999999.json
+            agents/output/captions_9999999999.srt
+          if-no-files-found: warn
+          retention-days: 7
