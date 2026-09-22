@@ -12,6 +12,8 @@ permissions:
 jobs:
   canary:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
