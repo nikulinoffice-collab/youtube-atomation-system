@@ -296,15 +296,11 @@ def main():
     if backend == "m6-ryan":
         from scripts.m6_production_ryan import synthesize
         result = synthesize(script_text, voice_path.with_suffix(".wav"))
-        # Runtime alignment is mandatory; never manufacture timings from synthesis duration.
+        from scripts.m6_production_alignment import align
         alignment_path = OUTPUT_DIR / f"m6_alignment_{timestamp}.json"
-        if not alignment_path.exists():
-            raise SystemExit(
-                "M6_9_ALIGNMENT_REQUIRED: Ryan synthesis completed but a real WhisperX "
-                "alignment is required before production timeline creation."
-            )
+        aligned = align(voice_path.with_suffix(".wav"), result["voice_plan"], device="cpu")
+        alignment_path.write_text(json.dumps(aligned, indent=2, ensure_ascii=False), encoding="utf-8")
         from scripts.m6_production_timeline import build_production_timeline
-        aligned = json.loads(alignment_path.read_text(encoding="utf-8"))
         timeline = build_production_timeline(
             script_text, aligned["word_timings"], result["duration_s"], voice="Ryan"
         )
