@@ -63,4 +63,4 @@ jobs:
 
       - name: Qualify M6.9 production migration gate with M6.1-M6.8 regressions
         if: ${{ inputs.milestone == 'm6.9' || (github.event_name == 'push' && (contains(github.event.head_commit.message, 'm6.9') || contains(github.event.head_commit.message, 'M6.9'))) }}
-        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py
+        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py tests/test_m6_production_alignment.py
