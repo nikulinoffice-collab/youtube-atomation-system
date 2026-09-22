@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Sequence
 
-LEXICAL_RE = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
+LEXICAL_RE = re.compile(r"(?:[$€£]?[0-9]+(?:[.,][0-9]+)*(?:[KMB])?|[^\W_]+(?:['’][^\W_]+)*)", re.UNICODE | re.IGNORECASE)
 
 class TimelineBridgeError(ValueError):
     pass
