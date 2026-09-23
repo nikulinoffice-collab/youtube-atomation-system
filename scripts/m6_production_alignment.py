@@ -6,6 +6,10 @@ from pathlib import Path
 class ProductionAlignmentError(RuntimeError): pass
 def _norm(s:str)->str: return re.sub(r"[^a-z0-9']+","",s.casefold())
 def _lexical_spans(text:str): return [(m.start(),m.end(),m.group(0)) for m in re.finditer(r"(?:[$€£]?[0-9]+(?:[.,][0-9]+)*(?:[KMB])?|[^\W_]+(?:['’][^\W_]+)*)",text,re.UNICODE|re.IGNORECASE)]
+def _forced_segments(vp:dict,duration_s:float)->list[dict]:
+ text=str(vp["spoken_text"])
+ if not text.strip() or duration_s<=0: raise ProductionAlignmentError("INVALID_FORCED_ALIGNMENT_INPUT")
+ return [{"text":text,"start":0.0,"end":float(duration_s)}]
 def _spoken_to_display(n:dict,pos:int,*,end=False)->int:
  d=n["display_text"]; dc=sc=0
  for m in n.get("mappings",[]):
@@ -22,9 +26,6 @@ def _emit_group(out,cg,og):
 def _bind_tokens(canonical,observed):
  out=[];ci=oi=0
  while ci<len(canonical) and oi<len(observed):
-  # WhisperX may render a normalized spoken expansion in its original display form
-  # (e.g. spoken "twenty twenty six" observed as "2026").  Accept that only when
-  # provenance proves all consumed canonical tokens map to the exact same display token.
   span=canonical[ci].get("display_span_id");display=_norm(str(canonical[ci].get("display_text","")));ow=_norm(str(observed[oi]["word"]))
   if span and display and ow==display:
    cj=ci+1
@@ -56,7 +57,14 @@ def align(wav_path:Path,voice_plan:dict,normalized:dict|None=None,*,device="cpu"
  if normalized["spoken_text"]!=voice_plan["spoken_text"]:raise ProductionAlignmentError("NORMALIZATION_PROVENANCE_MISMATCH")
  try:import whisperx
  except Exception as exc:raise ProductionAlignmentError(f"WHISPERX_IMPORT_FAILED: {exc}") from exc
- audio=whisperx.load_audio(str(wav_path));model=whisperx.load_model("tiny.en",device,compute_type="int8");raw=model.transcribe(audio,batch_size=4,language="en");am,meta=whisperx.load_align_model(language_code="en",device=device);res=whisperx.align(raw["segments"],am,meta,audio,device,return_char_alignments=False);obs=[]
+ audio=whisperx.load_audio(str(wav_path))
+ # This is forced alignment, not transcription validation. ASR hypotheses may omit,
+ # insert or normalize words (the canary observed canonical "and" as "in"). Feeding
+ # an ASR hypothesis into the aligner makes exact source coverage impossible by design.
+ # The canonical M6.1 spoken_text is therefore the only text supplied to WhisperX.
+ duration_s=len(audio)/16000.0
+ am,meta=whisperx.load_align_model(language_code="en",device=device)
+ res=whisperx.align(_forced_segments(voice_plan,duration_s),am,meta,audio,device,return_char_alignments=False);obs=[]
  for seg in res.get("segments",[]):obs.extend(seg.get("words",[]))
  obs=[w for w in obs if w.get("start") is not None and w.get("end") is not None and _norm(str(w.get("word","")))];can=_canonical_tokens(voice_plan,normalized);bound=_bind_tokens(can,obs);tim=[{k:v for k,v in x.items() if k!="text"} for x in bound]
- return {"version":"m6.9-whisperx-production-v3","word_timings":tim,"coverage":{"expected_words":len(can),"aligned_words":len(tim),"observed_words":len(obs),"exact_normalized_stream":True}}
+ return {"version":"m6.9-whisperx-production-v4","word_timings":tim,"coverage":{"expected_words":len(can),"aligned_words":len(tim),"observed_words":len(obs),"exact_normalized_stream":True}}
