@@ -8,6 +8,14 @@ def test_normalization_handles_punctuation_and_case():
 def test_alignment_import_is_lazy():
     assert callable(m.align)
 
+def test_forced_segments_use_canonical_spoken_text_not_asr_hypothesis():
+    vp={"spoken_text":"A quiet breakthrough. In twenty twenty six, the system asks one question."}
+    segments=m._forced_segments(vp,12.5)
+    assert segments==[{"text":vp["spoken_text"],"start":0.0,"end":12.5}]
+    # Regression: the runtime ASR hypothesis omitted/replaced words (e.g. canonical
+    # "and" was paired with observed "in"). Forced alignment must never use that
+    # hypothesis as the text source, otherwise exact canonical coverage is impossible.
+
 def test_one_observation_can_cover_multiple_canonical_tokens_without_loss():
     canonical=[{"text":"twenty"},{"text":"four"},{"text":"hours"}]
     observed=[{"word":"twentyfour","start":1.0,"end":1.6,"score":.9},{"word":"hours","start":1.7,"end":2.0,"score":.8}]
