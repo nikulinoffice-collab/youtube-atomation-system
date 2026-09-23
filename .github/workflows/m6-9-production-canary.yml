@@ -76,3 +76,4 @@ jobs:
             agents/output/captions_9999999999.srt
           if-no-files-found: warn
           retention-days: 7
+      # canary trigger revision includes the Edge isolation fix
