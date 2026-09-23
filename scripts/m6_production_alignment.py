@@ -15,9 +15,21 @@ def _spoken_to_display(n:dict,pos:int,*,end=False)->int:
   if pos<=m["spoken_end"]:return m["display_end"] if end or pos==m["spoken_end"] else m["display_start"]
   dc=m["display_end"];sc=m["spoken_end"]
  return min(len(d),dc+pos-sc)
+def _emit_group(out,cg,og):
+ start=float(og[0]["start"]);end=float(og[-1]["end"]);total=sum(max(1,len(_norm(x["text"]))) for x in cg);cursor=start;used=0;score=min(float(x.get("score",1)) for x in og)
+ for k,item in enumerate(cg):
+  used+=max(1,len(_norm(item["text"])));te=end if k==len(cg)-1 else start+(end-start)*used/total;out.append({**item,"start_s":cursor,"end_s":te,"confidence":score});cursor=te
 def _bind_tokens(canonical,observed):
  out=[];ci=oi=0
  while ci<len(canonical) and oi<len(observed):
+  # WhisperX may render a normalized spoken expansion in its original display form
+  # (e.g. spoken "twenty twenty six" observed as "2026").  Accept that only when
+  # provenance proves all consumed canonical tokens map to the exact same display token.
+  span=canonical[ci].get("display_span_id");display=_norm(str(canonical[ci].get("display_text","")));ow=_norm(str(observed[oi]["word"]))
+  if span and display and ow==display:
+   cj=ci+1
+   while cj<len(canonical) and canonical[cj].get("display_span_id")==span:cj+=1
+   _emit_group(out,canonical[ci:cj],[observed[oi]]);ci=cj;oi+=1;continue
   c0=ci;o0=oi;cs=os=""
   while not(cs==os and cs):
    if (len(cs)<=len(os) and ci<len(canonical)) or oi>=len(observed):cs+=_norm(canonical[ci]["text"]);ci+=1
@@ -25,9 +37,7 @@ def _bind_tokens(canonical,observed):
    else:break
    if cs and os and not(cs.startswith(os) or os.startswith(cs)):raise ProductionAlignmentError(f"WHISPERX_TOKEN_MISMATCH: canonical={cs!r} observed={os!r}")
   if not cs or cs!=os:raise ProductionAlignmentError(f"WHISPERX_COVERAGE_MISMATCH: canonical={cs!r} observed={os!r}")
-  og=observed[o0:oi];cg=canonical[c0:ci];start=float(og[0]["start"]);end=float(og[-1]["end"]);total=sum(max(1,len(_norm(x["text"]))) for x in cg);cursor=start;used=0;score=min(float(x.get("score",1)) for x in og)
-  for k,item in enumerate(cg):
-   used+=max(1,len(_norm(item["text"])));te=end if k==len(cg)-1 else start+(end-start)*used/total;out.append({**item,"start_s":cursor,"end_s":te,"confidence":score});cursor=te
+  _emit_group(out,canonical[c0:ci],observed[o0:oi])
  if ci!=len(canonical) or oi!=len(observed):raise ProductionAlignmentError(f"WHISPERX_COVERAGE_MISMATCH: canonical_remaining={len(canonical)-ci} observed_remaining={len(observed)-oi}")
  return out
 def _canonical_tokens(vp,n):
@@ -49,4 +59,4 @@ def align(wav_path:Path,voice_plan:dict,normalized:dict|None=None,*,device="cpu"
  audio=whisperx.load_audio(str(wav_path));model=whisperx.load_model("tiny.en",device,compute_type="int8");raw=model.transcribe(audio,batch_size=4,language="en");am,meta=whisperx.load_align_model(language_code="en",device=device);res=whisperx.align(raw["segments"],am,meta,audio,device,return_char_alignments=False);obs=[]
  for seg in res.get("segments",[]):obs.extend(seg.get("words",[]))
  obs=[w for w in obs if w.get("start") is not None and w.get("end") is not None and _norm(str(w.get("word","")))];can=_canonical_tokens(voice_plan,normalized);bound=_bind_tokens(can,obs);tim=[{k:v for k,v in x.items() if k!="text"} for x in bound]
- return {"version":"m6.9-whisperx-production-v2","word_timings":tim,"coverage":{"expected_words":len(can),"aligned_words":len(tim),"observed_words":len(obs),"exact_normalized_stream":True}}
+ return {"version":"m6.9-whisperx-production-v3","word_timings":tim,"coverage":{"expected_words":len(can),"aligned_words":len(tim),"observed_words":len(obs),"exact_normalized_stream":True}}
