@@ -28,7 +28,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import edge_tts
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 VOICE = "en-US-GuyNeural"  # rollback voice; M6.9 Ryan path is selected explicitly
@@ -256,7 +255,7 @@ def selected_backend() -> str:
 
 
 async def generate_voice_and_boundaries(text: str, audio_path: Path) -> list[dict]:
-    communicate = edge_tts.Communicate(text, voice=VOICE, rate=RATE, boundary="WordBoundary")
+    import edge_tts  # lazy rollback-only dependency; Ryan path must not require Edge-TTS\n    communicate = edge_tts.Communicate(text, voice=VOICE, rate=RATE, boundary="WordBoundary")
     boundaries: list[dict] = []
     with audio_path.open("wb") as audio_file:
         async for chunk in communicate.stream():
