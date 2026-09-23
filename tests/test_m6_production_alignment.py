@@ -22,6 +22,18 @@ def test_multiple_observations_can_cover_one_canonical_token_without_loss():
     out=m._bind_tokens(canonical,observed)
     assert len(out)==1 and out[0]["start_s"]==0.0 and out[0]["end_s"]==.5
 
+def test_display_token_observation_can_cover_spoken_expansion():
+    canonical=[
+        {"text":"twenty","display_text":"2026","display_span_id":"display-token:0:0:4"},
+        {"text":"twenty","display_text":"2026","display_span_id":"display-token:0:0:4"},
+        {"text":"six","display_text":"2026","display_span_id":"display-token:0:0:4"},
+        {"text":"systems","display_text":"systems","display_span_id":"display-token:1:5:12"},
+    ]
+    observed=[{"word":"2026","start":0.0,"end":.6,"score":.9},{"word":"systems","start":.7,"end":1.1,"score":.9}]
+    out=m._bind_tokens(canonical,observed)
+    assert [x["text"] for x in out]==["twenty","twenty","six","systems"]
+    assert out[0]["start_s"]==0.0 and out[2]["end_s"]==.6
+
 def test_boundary_reconciliation_fails_closed_on_text_change():
     with pytest.raises(m.ProductionAlignmentError,match="WHISPERX_TOKEN_MISMATCH"):
         m._bind_tokens([{"text":"Ryan"}],[{"word":"Brian","start":0,"end":1}])
