@@ -16,10 +16,13 @@ on:
       - 'agents/captions_agent.py'
       - 'agents/video_agent.py'
       - 'agents/qc_agent.py'
+      - 'agents/visual_qc_agent.py'
       - 'scripts/m6_*.py'
       - 'config/m6/**'
       - 'tests/test_m6_*.py'
       - '.github/workflows/m6-qualification.yml'
+      - '.github/workflows/m6-9-production-canary.yml'
+      - '.github/workflows/publish.yml'
 permissions:
   contents: read
 jobs:
@@ -64,7 +67,6 @@ jobs:
       - name: Qualify M6.8 QC/review package with M6.1-M6.7 regressions
         if: ${{ inputs.milestone == 'm6.8' }}
         run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py
-
       - name: Qualify M6.9 production migration gate with M6.1-M6.8 regressions
         if: ${{ inputs.milestone == 'm6.9' || (github.event_name == 'push' && (contains(github.event.head_commit.message, 'm6.9') || contains(github.event.head_commit.message, 'M6.9'))) }}
-        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py tests/test_m6_production_alignment.py
+        run: python -m pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py tests/test_m6_production_alignment.py tests/test_m6_production_media.py tests/test_m6_9_downstream_media_integration.py
