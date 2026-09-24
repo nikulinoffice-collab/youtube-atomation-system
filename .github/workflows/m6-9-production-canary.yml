@@ -5,6 +5,7 @@ on:
     branches: [factory-v1-voice-m6]
     paths:
       - ".github/workflows/m6-9-production-canary.yml"
+      - ".github/workflows/m6-qualification.yml"
       - "agents/voice_agent.py"
       - "agents/captions_agent.py"
       - "agents/video_agent.py"
