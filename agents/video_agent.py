@@ -70,7 +70,7 @@ def main():
         if not p.exists(): raise SystemExit(f"Missing {p.name}; earlier stages must complete before rendering.")
     duration=get_audio_duration(voice_path); manifest=json.loads(asset_path.read_text()); assets=prepare_render_assets(validate_asset_manifest(manifest),json.loads(script_path.read_text()),timestamp); segments=build_render_segments(assets,duration)
     silent=OUTPUT_DIR/f"_silent_{timestamp}.mp4"; build_visuals_segment(segments,silent)
-    renderer.write_text(json.dumps({"schema_version":2,"milestone":"M5.4","timestamp":timestamp,"strategy":"storyboard_scene_start_cuts_with_previous_scene_pause_hold","target_width":TARGET_WIDTH,"target_height":TARGET_HEIGHT,"target_fps":TARGET_FPS,"audio_duration":duration,"scene_count":len(segments),"segments":segments},indent=2),encoding="utf-8")
+    renderer.write_text(json.dumps({"schema_version":2,"milestone":"M5.4","timestamp":timestamp,"strategy":"storyboard_scene_start_cuts_with_previous_scene_pause_hold","source_card_strategy":"concise_caption_safe_mobile_card","target_width":TARGET_WIDTH,"target_height":TARGET_HEIGHT,"target_fps":TARGET_FPS,"audio_duration":duration,"scene_count":len(segments),"segments":segments},indent=2),encoding="utf-8")
     subs=escape_for_ffmpeg_filter(captions); cmd=["ffmpeg","-y","-i",str(silent),"-i",str(voice_path),"-filter_complex",f"[0:v]subtitles='{subs}':force_style='{SUBTITLE_STYLE}'[outv]","-map","[outv]","-map","1:a","-c:v","libx264","-pix_fmt","yuv420p","-r",str(TARGET_FPS),"-c:a","aac","-shortest",str(final)]
     run(cmd); silent.unlink(missing_ok=True); print(f"✅ M5.4 render ready: {final.name}")
 if __name__=="__main__": main()
