@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "active_backend": "m6-ryan",
+  "rollback_backend": "edge",
+  "rollback_voice": "en-US-GuyNeural",
+  "migration": "M6.9",
+  "publishing_enabled": false
+}
