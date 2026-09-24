@@ -7,9 +7,12 @@ on:
       - ".github/workflows/m6-9-production-canary.yml"
       - "agents/voice_agent.py"
       - "agents/captions_agent.py"
+      - "agents/video_agent.py"
+      - "agents/qc_agent.py"
+      - "agents/visual_qc_agent.py"
       - "scripts/m6_production_*.py"
       - "config/m6/qwen3_ryan_frozen.json"
-      - "tests/test_m6_production_*.py"
+      - "tests/test_m6*.py"
 
 permissions:
   contents: read
@@ -28,12 +31,12 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
-          pip install pytest numpy torch qwen-tts==0.1.1 whisperx==3.8.6
+          pip install pytest numpy torch pillow qwen-tts==0.1.1 whisperx==3.8.6
       - name: Verify exact revision
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - name: Run M6.9 regression
-        run: pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py tests/test_m6_production_alignment.py
-      - name: Real Ryan production-path canary
+        run: pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py tests/test_m6_production_alignment.py tests/test_m6_production_media.py tests/test_m6_9_downstream_media_integration.py
+      - name: Real Ryan production-path canary through captions
         env: {FACTORY_VOICE_BACKEND: m6-ryan}
         run: |
           mkdir -p agents/output
@@ -48,18 +51,53 @@ jobs:
           test -s agents/output/m6_alignment_9999999999.json
           test -s agents/output/narration_timeline_9999999999.json
           test -s agents/output/captions_9999999999.srt
+      - name: Build deterministic non-paid visual fixtures
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from PIL import Image
+          out=Path("agents/output"); stamp="9999999999"
+          timeline=json.loads((out/f"narration_timeline_{stamp}.json").read_text())
+          duration=float(timeline["duration"]); n=8; step=duration/n
+          scenes=[]; pools=[]; assets=[]
+          categories=["technology","people","laboratory","city","hardware","software","studio","abstract"]
+          for i in range(n):
+              sid=i+1; start=i*step; end=(i+1)*step
+              image=out/f"canary_scene_{sid}.png"
+              Image.new("RGB",(540,960),(30+sid*20,50+sid*12,80+sid*8)).save(image)
+              asset_id=f"canary-{sid}"
+              scenes.append({"scene_id":sid,"start":start,"end":end,"text":f"Canary scene {sid}","visual_goal":f"Deterministic production canary visual {sid}","specificity_required":"generic"})
+              candidate={"asset_id":asset_id,"technical_status":"eligible","download_width":540,"download_height":960,"ranking":{"rank":1}}
+              pools.append({"scene_id":sid,"ranked_candidates":[candidate]})
+              assets.append({"scene_id":sid,"scene_start":start,"scene_end":end,"asset_id":asset_id,"path":str(image),"type":"image","provider":"pexels","source_url":f"https://example.invalid/canary/{sid}","query":f"canary {sid}","preferred_motion":"static","selection":{"rank":1,"final_score":1.0,"technical_score":1.0,"semantic_score":1.0,"penalty_total":0.0,"visual_category":categories[i],"reasons":["deterministic non-paid canary fixture"]}})
+          (out/f"storyboard_{stamp}.json").write_text(json.dumps({"scenes":scenes},indent=2))
+          (out/f"candidate_manifest_{stamp}.json").write_text(json.dumps({"milestone":"M5.3","scenes":pools},indent=2))
+          (out/f"asset_manifest_{stamp}.json").write_text(json.dumps({"scene_count":n,"acquisition_strategy":"semantic_ranked_with_global_diversity_penalties","assets":assets},indent=2))
+          PY
+      - name: Render and run full non-publishing QC
+        env: {FACTORY_VOICE_BACKEND: m6-ryan}
+        run: |
+          python agents/video_agent.py
+          python agents/qc_agent.py
+          test -s agents/output/final_9999999999.mp4
+          test -s agents/output/renderer_manifest_9999999999.json
+          test -s agents/output/qc_report_9999999999.json
           python - <<'PY'
           import json,wave
           from pathlib import Path
-          t=json.loads(Path("agents/output/narration_timeline_9999999999.json").read_text());a=json.loads(Path("agents/output/m6_alignment_9999999999.json").read_text())
+          out=Path("agents/output"); stamp="9999999999"
+          t=json.loads((out/f"narration_timeline_{stamp}.json").read_text()); a=json.loads((out/f"m6_alignment_{stamp}.json").read_text()); q=json.loads((out/f"qc_report_{stamp}.json").read_text()); r=json.loads((out/f"renderer_manifest_{stamp}.json").read_text())
           assert t["voice"]=="Ryan" and t["source"]=="m6.9-qwen3-ryan-whisperx"
           assert a["coverage"]["expected_words"]==a["coverage"]["aligned_words"] and a["coverage"]["exact_normalized_stream"] is True
-          with wave.open("agents/output/voice_9999999999.wav","rb") as w:
-            duration=w.getnframes()/w.getframerate();assert w.getframerate()==24000 and w.getnchannels()==1
+          assert q["status"]=="PASS" and q["checks"]["visual_qc_status"]=="PASS"
+          assert r["source_card_strategy"]=="concise_caption_safe_mobile_card"
+          with wave.open(str(out/f"voice_{stamp}.wav"),"rb") as w:
+              duration=w.getnframes()/w.getframerate(); assert w.getframerate()==24000 and w.getnchannels()==1
           assert 0<t["speech_end"]<=duration+.02
-          print(json.dumps({"status":"PASS","voice":"Ryan","duration_s":duration,"aligned_words":a["coverage"]["aligned_words"],"observed_words":a["coverage"]["observed_words"]}))
+          print(json.dumps({"status":"PASS","voice":"Ryan","duration_s":duration,"aligned_words":a["coverage"]["aligned_words"],"observed_words":a["coverage"]["observed_words"],"renderer":"PASS","qc":"PASS"}))
           PY
-      - name: Upload canary evidence
+      - name: Upload full canary evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -69,5 +107,13 @@ jobs:
             agents/output/m6_alignment_9999999999.json
             agents/output/narration_timeline_9999999999.json
             agents/output/captions_9999999999.srt
+            agents/output/storyboard_9999999999.json
+            agents/output/candidate_manifest_9999999999.json
+            agents/output/asset_manifest_9999999999.json
+            agents/output/renderer_manifest_9999999999.json
+            agents/output/final_9999999999.mp4
+            agents/output/qc_report_9999999999.json
+            agents/output/visual_qc_report_9999999999.json
+            agents/output/visual_selection_report_9999999999.md
           if-no-files-found: warn
           retention-days: 7
