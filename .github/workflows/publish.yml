@@ -271,19 +271,12 @@ jobs:
         run: |
           shopt -s nullglob
           qcs=(agents/output/qc_report_[0-9]*.json)
-          renderers=(agents/output/renderer_manifest_[0-9]*.json)
-          timelines=(agents/output/narration_timeline_[0-9]*.json)
-          storyboards=(agents/output/storyboard_[0-9]*.json)
-          manifests=(agents/output/asset_manifest_[0-9]*.json)
-          candidates=(agents/output/candidate_manifest_[0-9]*.json)
-          voices=(agents/output/voice_[0-9]*.mp3)
-          captions=(agents/output/captions_[0-9]*.srt)
-          videos=(agents/output/final_[0-9]*.mp4)
-          for arr in qcs renderers timelines storyboards manifests candidates voices captions videos; do
-            eval "count=\${#$arr[@]}"
-            if [ "$count" -eq 0 ]; then echo "Missing required artifact class: $arr"; exit 1; fi
-          done
-          python - "${qcs[-1]}" "${renderers[-1]}" "${manifests[-1]}" <<'PY'
+          test ${#qcs[@]} -eq 1
+          qc_name="${qcs[0]##*/}"
+          timestamp="${qc_name#qc_report_}"
+          timestamp="${timestamp%.json}"
+          python scripts/m6_production_package_gate.py --output-dir agents/output --timestamp "$timestamp"
+          python - "agents/output/qc_report_${timestamp}.json" "agents/output/renderer_manifest_${timestamp}.json" "agents/output/asset_manifest_${timestamp}.json" <<'PY'
           import json, sys
           from pathlib import Path
           qc = json.loads(Path(sys.argv[1]).read_text())
