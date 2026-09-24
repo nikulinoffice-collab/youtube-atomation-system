@@ -17,10 +17,12 @@ def load_route(path: Path = DEFAULT_ROUTE) -> dict:
     rollback = data.get("rollback_backend")
     if active not in ALLOWED or rollback not in ALLOWED:
         raise ValueError("PRODUCTION_ROUTE_UNKNOWN_BACKEND")
-    if active == rollback:
-        raise ValueError("PRODUCTION_ROUTE_ROLLBACK_NOT_DISTINCT")
+    # Validate the intended production endpoint before relational invariants so
+    # a pre-switch/incorrect active route is reported as the primary defect.
     if active != "m6-ryan":
         raise ValueError("PRODUCTION_ROUTE_RYAN_NOT_ACTIVE")
+    if active == rollback:
+        raise ValueError("PRODUCTION_ROUTE_ROLLBACK_NOT_DISTINCT")
     if rollback != "edge" or data.get("rollback_voice") != "en-US-GuyNeural":
         raise ValueError("PRODUCTION_ROUTE_ROLLBACK_IDENTITY_MISMATCH")
     if data.get("publishing_enabled") is not False:
