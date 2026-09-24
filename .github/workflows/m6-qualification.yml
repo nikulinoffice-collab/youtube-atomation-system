@@ -12,6 +12,10 @@ on:
   push:
     branches: [factory-v1-voice-m6]
     paths:
+      - 'agents/voice_agent.py'
+      - 'agents/captions_agent.py'
+      - 'agents/video_agent.py'
+      - 'agents/qc_agent.py'
       - 'scripts/m6_*.py'
       - 'config/m6/**'
       - 'tests/test_m6_*.py'
