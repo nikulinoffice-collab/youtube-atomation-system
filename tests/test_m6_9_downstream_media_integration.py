@@ -24,7 +24,10 @@ def test_renderer_manifest_preserves_visual_qc_source_card_contract():
     assert '"source_card_strategy":"concise_caption_safe_mobile_card"' in source
 
 
-def test_production_workflow_does_not_require_mp3_for_ryan_route():
+def test_production_workflow_resolves_committed_route_without_hardcoded_ryan():
     source = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
-    assert "FACTORY_VOICE_BACKEND: m6-ryan" in source
+    assert "from scripts.m6_production_route import load_route, active_backend" in source
+    assert 'assert route["publishing_enabled"] is False' in source
+    assert 'print(f"FACTORY_VOICE_BACKEND={active_backend(route)}")' in source
+    assert "FACTORY_VOICE_BACKEND: m6-ryan" not in source
     assert "voices=(agents/output/voice_[0-9]*.mp3)" not in source
