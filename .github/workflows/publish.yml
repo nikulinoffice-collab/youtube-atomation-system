@@ -60,12 +60,20 @@ jobs:
           if [ -z "$GEMINI_API_KEY" ]; then echo "Missing required repository secret: GEMINI_API_KEY"; exit 1; fi
           if [ -z "$PEXELS_API_KEY" ]; then echo "Missing required repository secret: PEXELS_API_KEY"; exit 1; fi
 
+      - name: Resolve committed production voice route
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          from scripts.m6_production_route import load_route, active_backend
+          route = load_route()
+          assert route["publishing_enabled"] is False, "PRODUCTION_PUBLISHING_MUST_REMAIN_DISABLED"
+          print(f"FACTORY_VOICE_BACKEND={active_backend(route)}")
+          PY
+
       - name: Generate and QC draft video
         working-directory: agents
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          FACTORY_VOICE_BACKEND: m6-ryan
         run: |
           python script_agent.py
           python voice_agent.py
