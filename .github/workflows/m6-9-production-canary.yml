@@ -37,8 +37,19 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - name: Run M6.9 regression
         run: pytest -q tests/test_m6_voice_script.py tests/test_m6_voice_plan.py tests/test_m6_voice_plan_validator.py tests/test_m6_tts_adapter.py tests/test_m6_qwen3_adapter.py tests/test_m6_block_renderer.py tests/test_m6_mastering.py tests/test_m6_alignment.py tests/test_m6_qc.py tests/test_m6_review_package.py tests/test_m6_production_gate.py tests/test_m6_production_timeline.py tests/test_m6_production_ryan.py tests/test_m6_production_alignment.py tests/test_m6_production_media.py tests/test_m6_9_downstream_media_integration.py
-      - name: Real Ryan production-path canary through captions
-        env: {FACTORY_VOICE_BACKEND: m6-ryan}
+      - name: Resolve committed production voice route
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          from scripts.m6_production_route import load_route, active_backend
+          route = load_route()
+          assert route["publishing_enabled"] is False, "CANARY_PUBLISHING_MUST_BE_DISABLED"
+          backend = active_backend(route)
+          assert backend == "m6-ryan", f"POST_SWITCH_ROUTE_NOT_RYAN:{backend}"
+          print(f"FACTORY_VOICE_BACKEND={backend}")
+          PY
+          ! grep -qE '(^|[ /])upload_agent\.py([ ;]|$)' .github/workflows/m6-9-production-canary.yml
+
+      - name: Real production-route canary through captions
         run: |
           mkdir -p agents/output
           python - <<'PY'
@@ -77,7 +88,6 @@ jobs:
           (out/f"asset_manifest_{stamp}.json").write_text(json.dumps({"scene_count":n,"acquisition_strategy":"semantic_ranked_with_global_diversity_penalties","assets":assets},indent=2))
           PY
       - name: Render and run full non-publishing QC
-        env: {FACTORY_VOICE_BACKEND: m6-ryan}
         run: |
           python agents/video_agent.py
           python agents/qc_agent.py
