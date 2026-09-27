@@ -28,8 +28,7 @@ def test_production_workflow_resolves_committed_route_without_hardcoded_ryan():
     source = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
     assert "from scripts.m6_production_route import load_route, active_backend" in source
     assert 'assert route["publishing_enabled"] is False' in source
-    assert 'print(f"FACTORY_VOICE_BACKEND={active_backend()}")' in source
-    assert "active_backend(route)" not in source
+    assert 'print(f"FACTORY_VOICE_BACKEND={active_backend(route)}")' in source
     assert "FACTORY_VOICE_BACKEND: m6-ryan" not in source
     assert "voices=(agents/output/voice_[0-9]*.mp3)" not in source
 
@@ -37,7 +36,7 @@ def test_production_workflow_resolves_committed_route_without_hardcoded_ryan():
 def test_canary_resolves_committed_route_with_supported_api():
     source = (ROOT / ".github" / "workflows" / "m6-9-production-canary.yml").read_text(encoding="utf-8")
     assert "route = load_route()" in source
-    assert "backend = active_backend()" in source
+    assert "backend = active_backend(route)" in source
     assert "active_backend(route)" not in source
     assert 'assert route["publishing_enabled"] is False' in source
     assert "FACTORY_VOICE_BACKEND: m6-ryan" not in source
