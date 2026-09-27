@@ -30,8 +30,18 @@ def load_route(path: Path = DEFAULT_ROUTE) -> dict:
     return data
 
 
-def active_backend(path: Path = DEFAULT_ROUTE) -> str:
-    return str(load_route(path)["active_backend"])
+def active_backend(route_or_path: dict | Path = DEFAULT_ROUTE) -> str:
+    """Return the validated active backend from a route mapping or route file."""
+    route = route_or_path if isinstance(route_or_path, dict) else load_route(route_or_path)
+    if route.get("schema_version") != 1:
+        raise ValueError("PRODUCTION_ROUTE_SCHEMA_MISMATCH")
+    if route.get("active_backend") != "m6-ryan":
+        raise ValueError("PRODUCTION_ROUTE_RYAN_NOT_ACTIVE")
+    if route.get("rollback_backend") != "edge" or route.get("rollback_voice") != "en-US-GuyNeural":
+        raise ValueError("PRODUCTION_ROUTE_ROLLBACK_IDENTITY_MISMATCH")
+    if route.get("publishing_enabled") is not False:
+        raise ValueError("PRODUCTION_ROUTE_PUBLISHING_MUST_REMAIN_DISABLED")
+    return str(route["active_backend"])
 
 
 def rollback_backend(path: Path = DEFAULT_ROUTE) -> str:
