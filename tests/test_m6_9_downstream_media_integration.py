@@ -37,7 +37,6 @@ def test_canary_resolves_committed_route_with_supported_api():
     source = (ROOT / ".github" / "workflows" / "m6-9-production-canary.yml").read_text(encoding="utf-8")
     assert "route = load_route()" in source
     assert "backend = active_backend(route)" in source
-    assert "backend = active_backend(route)" in source
     assert 'assert route["publishing_enabled"] is False' in source
     assert "FACTORY_VOICE_BACKEND: m6-ryan" not in source
-    assert "upload_agent.py" in source
+    assert "upload_agent.py" not in source
