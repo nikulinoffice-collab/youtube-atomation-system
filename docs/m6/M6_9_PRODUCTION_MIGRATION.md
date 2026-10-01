@@ -1,6 +1,6 @@
 # M6.9 Production Migration
 
-Status: IN_PROGRESS
+Status: COMPLETE
 
 M6.9 migrates the voice factory to the exact Ryan configuration approved in M6.8. It must not alter voice quality parameters.
 
@@ -73,8 +73,45 @@ Migration is transactional: prepare -> qualify -> canary -> switch. Any failure 
 
 Rollback target: Edge `en-US-GuyNeural` only. Ryan must not depend on Edge-only runtime dependencies.
 
+## Final M6.9 closure evidence
+
+Executable production revision: `27e6457fca39be60df82b9c85f389a68b58e03db`.
+
+Persistent M6 Qualification:
+- Run: 36368166353
+- Job: 108758632217
+- Result: SUCCESS
+- Exact revision: 27e6457fca39be60df82b9c85f389a68b58e03db
+- Regression result: 117 passed, 1 skipped
+
+Route-bound post-switch non-publishing health canary:
+- Run: 36368166624
+- Job: 108758632885
+- Result: SUCCESS
+- Exact revision: 27e6457fca39be60df82b9c85f389a68b58e03db
+- Regression result: 105 passed
+- Evidence artifact: 10947933381
+- Artifact digest: `sha256:c7ece850b269b38443d6b7ace60ff390a68dde0fed5d7d7d601f36a1da035ac7`
+- Production route source: committed `config/m6/production_voice_route.json`
+- Active backend: `m6-ryan`
+- Rollback backend/voice: `edge` / `en-US-GuyNeural`
+- Publishing enabled: false
+- Publishing/upload invocation: NOT PERFORMED; the canary regression and workflow explicitly require that `upload_agent.py` is absent from the canary workflow.
+- Audio: lossless mono WAV, 24000 Hz, 23.68 s
+- Canonical alignment: expected/aligned/observed 53/53/53; exact normalized stream PASS
+- Renderer: PASS; 8 rendered segments; candidate-to-asset-to-renderer chain valid
+- Visual QC: PASS
+- Final QC: PASS
+
+Rollback verification is covered by the M6.9 qualification/adversarial contract: failure before switch leaves the prior route unchanged, successful switch leaves Ryan active, and failed/exception post-switch health restores the exact Edge/GuyNeural rollback state while publishing remains disabled.
+
+Frozen-state verification:
+- `config/m6/qwen3_ryan_frozen.json` remains the approved immutable Ryan/Qwen identity and generation configuration.
+- Frozen branch `factory-v1-storyboard` remains at `ddd55af7ed3f7bd418b078140909750d758519bb`.
+- No paid service, billing, new secret, publishing action, social/video upload, or quality-gate weakening was used for closure.
+
+This evidence commit is documentation-only. The exact executable production revision qualified and exercised by the route-bound real-runtime canary remains `27e6457fca39be60df82b9c85f389a68b58e03db`.
+
 ## Current state
 
-Prepare, exact-revision qualification, real Ryan/canonical alignment/captions canary, downstream lossless-WAV renderer integration, and full non-publishing renderer/QC canary are PASS.
-
-The production workflow is staged for `m6-ryan`, but final migration is not COMPLETE yet. Before completion, the production workflow's own verification/package logic must be audited for remaining MP3-only assumptions, the switch/automatic-rollback contract must be machine-verifiable, the exact final production revision must pass persistent qualification, and a post-switch non-publishing health canary must PASS. Temporary canary infrastructure must remain until final evidence is persisted.
+M6.9 is COMPLETE. The committed production route resolves to Ryan, persistent qualification and the route-bound full-path post-switch health canary passed on the exact executable production revision, renderer/visual/final QC passed, automatic Edge/GuyNeural rollback is regression-verified, publishing remains disabled and the canary did not invoke the upload/publishing path, final evidence is persisted, and both the frozen Ryan configuration and frozen storyboard branch remain unchanged.
