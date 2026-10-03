@@ -255,7 +255,8 @@ def selected_backend() -> str:
 
 
 async def generate_voice_and_boundaries(text: str, audio_path: Path) -> list[dict]:
-    import edge_tts  # lazy rollback-only dependency; Ryan path must not require Edge-TTS\n    communicate = edge_tts.Communicate(text, voice=VOICE, rate=RATE, boundary="WordBoundary")
+    import edge_tts  # lazy rollback-only dependency; Ryan path must not require Edge-TTS
+    communicate = edge_tts.Communicate(text, voice=VOICE, rate=RATE, boundary="WordBoundary")
     boundaries: list[dict] = []
     with audio_path.open("wb") as audio_file:
         async for chunk in communicate.stream():
