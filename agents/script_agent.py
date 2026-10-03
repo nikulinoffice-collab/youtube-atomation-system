@@ -33,7 +33,8 @@ load_dotenv()
 API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 OUTPUT_DIR = Path(__file__).parent / "output"
-HISTORY_FILE = OUTPUT_DIR / "recent_topics.json"
+STATE_DIR = Path(__file__).parent / "state"
+HISTORY_FILE = STATE_DIR / "recent_topics.json"
 
 # Free, no-key-needed RSS feeds. Add/remove sources here freely.
 RSS_FEEDS = [
@@ -53,6 +54,7 @@ def load_recent_topics(limit: int = 100) -> list[str]:
 
 
 def save_recent_topic(identifier: str) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
     history = load_recent_topics(limit=200)
     history.append(identifier)
     HISTORY_FILE.write_text(json.dumps(history[-200:], indent=2))
