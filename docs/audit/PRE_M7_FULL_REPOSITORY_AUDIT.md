@@ -28,6 +28,7 @@ Status: IN_PROGRESS
 | AUD-P1-002 | P1 | Script topic history reads/writes `agents/output/recent_topics.json` while tracked canonical history is `agents/state/recent_topics.json`. | OPEN |
 | AUD-P1-003 | P1 | Cross-run anti-repeat state is not persisted by the read-only draft workflow. | OPEN; design/fail-closed resolution required |
 | AUD-P1-004 | P1 | `upload_agent.py` is an independently executable publishing entry point without an explicit opt-in authorization gate and defaults to public visibility. | OPEN |
+| AUD-P1-008 | P1 | Edge rollback path in `voice_agent.py` contains a literal `\\n` after the lazy `import edge_tts`, commenting out the `communicate = edge_tts.Communicate(...)` assignment; rollback execution reaches `communicate.stream()` with `communicate` undefined. Existing route/media tests assert rollback selection/artifact resolution but do not execute rollback synthesis. | OPEN; restore executable assignment and add rollback-path regression test |
 | AUD-P2-001 | P2 | README and some module documentation still describe legacy Edge/automatic publishing behavior inconsistent with the current manual draft-only Ryan route. | OPEN |
 | AUD-P2-002 | P2 | M5 storyboard/retrieval/ranking guarantees rely heavily on workflow inline assertions rather than a dedicated regression test layer. | OPEN |
 | AUD-P3-001 | P3 | Temporary M6.9 canary workflow remains after M6.9 closure. | REVIEW after audit evidence no longer depends on it |
