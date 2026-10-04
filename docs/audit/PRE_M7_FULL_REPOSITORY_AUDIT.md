@@ -58,3 +58,22 @@ The dependency drift fix was committed first. Continue from live HEAD, qualify a
 3. AUD-P1-003 — persist anti-repeat state across Actions runs using a read-only-safe cache/state mechanism; add restored-state and empty-state tests.
 4. Visual contract — restore validated Source Card and controlled still-motion behavior while preserving current M6.9 voice/media resolver; add fail-closed acquisition-boundary and runtime tests.
 5. Provenance contract — bind production-critical artifacts to explicit run identity/producer/schema; reject stale/wrong-producer/restored-cache contamination with adversarial tests.
+
+
+## Closure checkpoint — 2026-10-04
+- Repository tree inventory completed against current audit baseline: 106/106 tracked blobs classified; UNKNOWN=0. Classification: 77 ACTIVE, 25 REQUIRED, 4 TEMPORARY. Gate 1 evidence is complete subject to revalidation after subsequent mutations.
+- P0 open: 0.
+- AUD-P1-001 / AUD-P1-002 / AUD-P1-008 remain EXACT_SHA_PENDING because no workflow run is associated with the current executable HEAD; historical green runs do not qualify newer code.
+- AUD-P1-004 is READY_TO_FIX on `agents/upload_agent.py@3a2a95daf84d1fe28aa363c30a57e07d0063e390`: root cause is an independently executable upload path with public default and no explicit authorization before artifact discovery/OAuth/network. Minimal fix: default private plus explicit default-deny authorization as the first operation in `main()`; negative regression must prove artifact discovery, credentials and network are untouched when unauthorized.
+- AUD-P1-003 is DESIGN_READY: canonical state path exists, but Actions does not persist anti-repeat state across runners and corrupted/unreadable state currently degrades to empty history. Remediation must persist state without contents:write and fail closed on corrupted restored state.
+- Visual-contract P1 is READY_TO_FIX: current `video_agent.py` lacks validated M5.4 Source Card helpers and controlled still-motion behavior while current `m54_smoke.py` calls those helpers. Restore the validated frozen M5.4 Source Card/motion implementation while preserving the current M6.9 voice/media resolver and Ryan/Qwen parameters.
+- Gate 6 qualification hardening is READY_TO_FIX: qualification must watch the complete production-critical script/storyboard/visual/upload/dependency surface and run meaningful regression on every relevant push, not depend on commit-message matching.
+- Gate 4 reproducibility remains open: runtime dependencies using unbounded/lower-bound-only constraints require a deterministic lock/constraints strategy or equivalent reproducibility evidence before Gate 4/10 PASS.
+- Gate 8 normal draft workflow is manual/read-only/non-publishing, but independently executable `upload_agent.py` prevents Gate 8 PASS until AUD-P1-004 is closed.
+- Frozen `factory-v1-storyboard` reference remains immutable; no publishing/OAuth/YouTube upload was invoked during audit work.
+
+### Deterministic AUDIT_CURSOR
+- tracked classified: 106/106; UNKNOWN=0
+- executable/config audit denominator: 69
+- next closure queue: AUD-P1-004 -> qualification hardening -> AUD-P1-003 -> visual contract -> provenance/data contract
+- Gate 9 remains blocked until Gates 1–8 are evidenced; temporary canary/milestone evidence is retained.
