@@ -27,8 +27,8 @@ Status: IN_PROGRESS
 | AUD-P1-001 | P1 | Draft workflow installs `requirements.txt`, but the validated Ryan runtime dependencies `qwen-tts==0.1.1` and `whisperx==3.8.6` were absent. | FIX_COMMITTED; exact-SHA qualification pending |
 | AUD-P1-002 | P1 | Script topic history previously used `agents/output/recent_topics.json`; production code now uses canonical `agents/state/recent_topics.json` with state-directory creation and contract tests. | COMMITTED (`22626f8b`, tests `36357bd5`); exact-SHA qualification pending |
 | AUD-P1-003 | P1 | Cross-run anti-repeat state is not persisted by the read-only draft workflow. | OPEN; design/fail-closed resolution required |
-| AUD-P1-004 | P1 | `upload_agent.py` is an independently executable publishing entry point without an explicit opt-in authorization gate and defaults to public visibility. | OPEN |
-| AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. | COMMITTED (`a54d7f93` test, `140a5d4c` fix); exact-SHA qualification pending |
+| AUD-P1-004 | P1 | `upload_agent.py` is an independently executable publishing entry point; remediation changes the default to private and requires explicit `YOUTUBE_PUBLISH_AUTHORIZED=true` as the first `main()` operation before artifact discovery/OAuth/API/network. | COMMITTED (`610f72cb` implementation; `e3218283`/`f0fe9b26` negative tests); exact-SHA qualification running on `518597e0` |
+| AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913` |
 | AUD-P2-001 | P2 | README and some module documentation still describe legacy Edge/automatic publishing behavior inconsistent with the current manual draft-only Ryan route. | OPEN |
 | AUD-P2-002 | P2 | M5 storyboard/retrieval/ranking guarantees rely heavily on workflow inline assertions rather than a dedicated regression test layer. | OPEN |
 | AUD-P3-001 | P3 | Temporary M6.9 canary workflow remains after M6.9 closure. | REVIEW after audit evidence no longer depends on it |
@@ -77,3 +77,14 @@ The dependency drift fix was committed first. Continue from live HEAD, qualify a
 - executable/config audit denominator: 69
 - next closure queue: AUD-P1-004 -> qualification hardening -> AUD-P1-003 -> visual contract -> provenance/data contract
 - Gate 9 remains blocked until Gates 1–8 are evidenced; temporary canary/milestone evidence is retained.
+
+
+## Closure execution checkpoint — 2026-10-04 write unblocked
+- Supported GitHub Contents API write capability verified on `factory-v1-voice-m6`; repository connection reports push/admin permission. No low-level Git/ref bypass was used.
+- AUD-P1-004 implementation committed: `610f72cb375e9172168d3b44ad7f216def823cb5`; uploader default is private and explicit publish authorization is the first operation in `main()`.
+- AUD-P1-004 regression coverage committed and isolated from external API imports: `f0fe9b26637e194e116c11f92eb9940d3e09928c`.
+- Qualification blind spot remediation committed: `518597e0ecf248428e06752f213231e43cbdf56e`. Relevant pushes now watch `agents/**`, `scripts/**`, `config/**`, `tests/**`, `requirements.txt`, and qualification/publish workflows; push qualification no longer depends on commit-message matching.
+- Exact-SHA M6 Qualification run `37201974612` and M6.9 Ryan Production Canary run `37201974617` started for `518597e0ecf248428e06752f213231e43cbdf56e`; results pending at checkpoint time.
+- Inventory evidence: classified 106/106, UNKNOWN=0 (Gate 1 PASS_READY pending final persisted/revalidation semantics).
+- Executable/config semantic audit: 69/69 exact blobs audited at the pre-mutation checkpoint; affected mutated blobs require revalidation, so Gate 3 remains PASS_READY rather than PASS.
+- Frozen `factory-v1-storyboard` remains `ddd55af7ed3f7bd418b078140909750d758519bb`; publishing/upload was not invoked.
