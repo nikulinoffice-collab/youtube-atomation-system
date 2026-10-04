@@ -46,7 +46,7 @@ CATEGORY_ID = "28"
 
 # public | unlisted | private — start with "unlisted" or "private" while
 # you're still checking output quality, switch to "public" once confident.
-PRIVACY_STATUS = "public"
+PRIVACY_STATUS = "private"
 
 
 def find_latest(pattern: str) -> Path:
