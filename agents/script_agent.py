@@ -49,8 +49,8 @@ def load_recent_topics(limit: int = 100) -> list[str]:
         return []
     try:
         return json.loads(HISTORY_FILE.read_text())[-limit:]
-    except (json.JSONDecodeError, OSError):
-        return []
+    except (json.JSONDecodeError, OSError) as exc:
+        raise SystemExit(f"Recent-topic state is unreadable: {HISTORY_FILE}: {exc}") from exc
 
 
 def save_recent_topic(identifier: str) -> None:
