@@ -49,6 +49,15 @@ CATEGORY_ID = "28"
 PRIVACY_STATUS = "private"
 
 
+
+def require_publish_authorization() -> None:
+    """Fail closed unless publishing was deliberately authorized by a human."""
+    if os.environ.get("YOUTUBE_PUBLISH_AUTHORIZED", "").strip().lower() != "true":
+        raise SystemExit(
+            "YouTube publishing is disabled by default. "
+            "Set YOUTUBE_PUBLISH_AUTHORIZED=true only for an explicitly authorized publish run."
+        )
+
 def find_latest(pattern: str) -> Path:
     matches = sorted(OUTPUT_DIR.glob(pattern))
     if not matches:
@@ -135,6 +144,8 @@ def set_custom_thumbnail(youtube, video_id: str, thumbnail_path: Path) -> None:
 
 
 def main():
+    require_publish_authorization()
+
     script_path = find_latest("script_*.json")
     timestamp = script_path.stem.replace("script_", "")
     data = json.loads(script_path.read_text())
