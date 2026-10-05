@@ -10,7 +10,7 @@ Status: IN_PROGRESS
 - M6.9 production behavior and frozen Ryan/Qwen identity are immutable audit constraints.
 
 ## Gate status
-1. Inventory — IN_PROGRESS
+1. Inventory — PASS
 2. Architecture — IN_PROGRESS
 3. Line-by-line static audit — IN_PROGRESS
 4. Dependencies/external interfaces — IN_PROGRESS
@@ -88,3 +88,12 @@ The dependency drift fix was committed first. Continue from live HEAD, qualify a
 - Inventory evidence: classified 106/106, UNKNOWN=0 (Gate 1 PASS_READY pending final persisted/revalidation semantics).
 - Executable/config semantic audit: 69/69 exact blobs audited at the pre-mutation checkpoint; affected mutated blobs require revalidation, so Gate 3 remains PASS_READY rather than PASS.
 - Frozen `factory-v1-storyboard` remains `ddd55af7ed3f7bd418b078140909750d758519bb`; publishing/upload was not invoked.
+
+## Closure-first gate dependency map — 2026-10-05
+- Gate 1 — PASS. Evidence: tracked inventory 106/106 classified; UNKNOWN=0; active HEAD revalidated at `a65f7c69598f68868dce12f1efafb4079d2b53cb`. No unresolved P0/P1 directly blocks inventory completeness.
+- Gate 3 — PASS_READY only. Static-audit denominator is 69, but the 2026-10-04 checkpoint explicitly requires revalidation of affected mutated executable/config blobs before PASS.
+- AUD-P1-003 DIRECT_BLOCKS: Gate 5, Gate 6, Gate 7, Gate 10 — cross-run anti-repeat persistence/fail-closed restored state.
+- AUD-P1-004 DIRECT_BLOCKS: Gate 8, Gate 10 — independent uploader authorization/default-deny boundary; live remediation/evidence must be synchronized before closure.
+- Visual-contract P1 DIRECT_BLOCKS: Gate 5, Gate 7, Gate 10.
+- Provenance/data-contract P1 DIRECT_BLOCKS: Gate 5, Gate 7, Gate 10.
+- Qualification watched-path blind spot DIRECT_BLOCKS: Gate 6, Gate 7, Gate 10; remediation evidence must be synchronized from live repository/Actions state.
