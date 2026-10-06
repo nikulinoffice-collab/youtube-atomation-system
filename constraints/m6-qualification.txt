@@ -1,0 +1,6 @@
+# Exact direct dependencies for PRE-M7 M6 qualification.
+# Versions are frozen from the last successful exact-SHA qualification environment.
+pytest==9.1.1
+feedparser==6.0.14
+python-dotenv==1.2.4
+google-genai==2.28.0
