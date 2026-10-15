@@ -13,7 +13,7 @@ Status: IN_PROGRESS
 1. Inventory — PASS
 2. Architecture — PASS
 3. Line-by-line static audit — PASS
-4. Dependencies/external interfaces — IN_PROGRESS
+4. Dependencies/external interfaces — PASS
 5. Data flow/contracts — IN_PROGRESS
 6. GitHub Actions/automation — IN_PROGRESS
 7. Tests/QC/fail-closed — IN_PROGRESS
@@ -24,11 +24,11 @@ Status: IN_PROGRESS
 ## Findings ledger
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| AUD-P1-001 | P1 | Draft workflow installs `requirements.txt`, but the validated Ryan runtime dependencies `qwen-tts==0.1.1` and `whisperx==3.8.6` were absent. | FIX_COMMITTED; exact-SHA qualification pending |
+| AUD-P1-001 | P1 | Draft/full-production dependency environment previously lacked exact shared enforcement for the validated Ryan runtime and the complete production graph. DIRECT_BLOCKS=[4,6,7,10]. | CLOSED — shared 189-package exact constraints lock is enforced by qualification and draft workflows; `qwen-tts==0.1.1` and `whisperx==3.8.6` remain frozen; dependency-contract regression executed in exact-SHA M6 Qualification `38703875490`, job `116318345733`, on `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`: SUCCESS, 128 passed / 1 skipped, `pip check` PASS. |
 | AUD-P1-002 | P1 | Script topic history previously used `agents/output/recent_topics.json`; production code now uses canonical `agents/state/recent_topics.json` with state-directory creation and contract tests. DIRECT_BLOCKS=[5,7,10]. | CLOSED — implementation `22626f8b` and tests `36357bd5` are contained in exact-SHA-qualified `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS and executed the state-contract test suite. |
-| AUD-P1-003 | P1 | Cross-run anti-repeat state is not persisted by the read-only draft workflow. | OPEN; design/fail-closed resolution required |
+| AUD-P1-003 | P1 | Cross-run anti-repeat state is not persisted by the read-only draft workflow. DIRECT_BLOCKS=[5,6,7,10]. | OPEN; design/fail-closed resolution required |
 | AUD-P1-004 | P1 | `upload_agent.py` independently executable publishing entry point remediated with default-private plus explicit `YOUTUBE_PUBLISH_AUTHORIZED=true` as the first `main()` operation before artifact discovery/OAuth/API/network. DIRECT_BLOCKS=[8,10]. | CLOSED — corrected implementation `94b0f477b54b9f0655c8b627f66335eb7fa9b6f4` contained in exact-SHA-qualified `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS. |
-| AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913` |
+| AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. DIRECT_BLOCKS=[6,7,10]. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913`; fix remains contained in latest qualified executable `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`. |
 | AUD-P2-001 | P2 | README and some module documentation still describe legacy Edge/automatic publishing behavior inconsistent with the current manual draft-only Ryan route. | OPEN |
 | AUD-P2-002 | P2 | M5 storyboard/retrieval/ranking guarantees rely heavily on workflow inline assertions rather than a dedicated regression test layer. | OPEN |
 | AUD-P3-001 | P3 | Temporary M6.9 canary workflow remains after M6.9 closure. | REVIEW after audit evidence no longer depends on it |
@@ -41,7 +41,13 @@ Status: IN_PROGRESS
 - Frozen Ryan/Qwen identity/quality parameters have not been modified.
 
 ## Current checkpoint
-The dependency drift fix was committed first. Continue from live HEAD, qualify all executable/environment changes on their exact SHA, close P1 findings before cleanup, then complete inventory, requirement-test matrix, clean-room non-publishing E2E evidence, and final PASS criteria.
+- Latest exact-SHA-qualified executable/config revision: `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`.
+- M6 Qualification run `38703875490`, job `116318345733`: SUCCESS; `128 passed, 1 skipped`; full locked production install and `pip check` PASS.
+- Formal Gates PASS: 1, 2, 3, 4, 8 = 5/10.
+- P0 open: 0.
+- AUD-P1-001, AUD-P1-002, AUD-P1-004 and AUD-P1-008 are CLOSED.
+- Next direct P1 closure priority is AUD-P1-003, then visual-contract and provenance/data-contract blockers for Gates 5/7/10.
+- Gate 9 remains blocked until Gates 1–8 PASS; Gate 10 remains blocked until its direct prerequisites are closed.
 
 ## Closure checkpoint — 2026-10-03
 - Live active HEAD: `36357bd5c9e6f378d7fd167977f3dea86a4f58da`.
@@ -118,3 +124,26 @@ The dependency drift fix was committed first. Continue from live HEAD, qualify a
 - Current first-party executable/config/runtime-significant accounting: 70/70 exact blobs audited, including the dependency-control constraints file. Gate 3 remains PASS.
 - P0 open: 0.
 - Safety invariants preserved: `factory-v1-storyboard` remains frozen; publishing/upload was not invoked; frozen Ryan/Qwen identity/quality parameters are unchanged.
+
+
+## Gate 4 closure synchronization — 2026-10-15
+- Pre-ledger live HEAD: `ec3f93b5478cadb8a0fe52396fd22dcd75d95aa3`; this and the ledger synchronization are docs-only descendants of the qualified executable/config SHA.
+- Latest exact-SHA-qualified executable/config revision: `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`.
+- M6 Qualification run `38703875490`, job `116318345733`: SUCCESS; `128 passed, 1 skipped`; `pip check` PASS; CPython 3.11.17; ubuntu-24.04.
+- Gate 4 — PASS. Closure evidence: `PRE_M7_GATE4_REPRODUCIBILITY_CLOSURE.md@9de629eb6a2eb9e3cd1e4b5a9c24baed7851f357`.
+- Canonical shared production dependency lock: `constraints/m6-qualification.txt@b18072acbb3fbb7d282b6bf4516a112c8a1dfe65`, 189 exact-pinned packages derived from a successful exact-SHA environment.
+- Qualification workflow: `.github/workflows/m6-qualification.yml@856c68ff07bb21fa3a1b7363aa0788c91de07235`; watches `constraints/**`, installs full production requirements through the lock, performs `pip check`, and executes dependency-contract regression.
+- Draft workflow: `.github/workflows/publish.yml@32a9a402f0c740c781820e44d3811a2d02bed70b`; same lock, same Python 3.11.17, ubuntu-24.04, runtime identity recording. Publishing remains disabled/uninvoked.
+- Focused regression: `tests/test_pre_m7_dependency_contracts.py@715c33746ba2e393dca679b9db4bf398b60b8f80`; executed by the successful final qualification.
+- AUD-P1-001 — CLOSED on the evidence above.
+- Current tracked inventory accounting: 113/113 classified; UNKNOWN=0. The only new tracked path since the 112/112 checkpoint is the dependency-contract regression test, classified REQUIRED/TEST. Gate 1 remains PASS.
+- Current first-party executable/config/test/runtime-significant accounting: 71/71 exact blobs audited. The new dependency-contract regression adds one denominator entry; modified workflow/lock blobs were differentially audited and exact-SHA-qualified. Gate 3 remains PASS.
+- Hosted runner image patch revisions and Ubuntu apt/ffmpeg contents remain provider-managed boundaries; exact observed identities are recorded, and correctness is fail-closed through locked install, `pip check`, tests, renderer/QC gates. No paid service, billing action, new secret, upload, or publishing action was introduced.
+
+### AUDIT_CURSOR delta
+- `constraints/m6-qualification.txt|b18072acbb3fbb7d282b6bf4516a112c8a1dfe65|REQUIRED_CONFIG|canonical production dependency lock|qualified environment|qualification+draft workflows|runtime/config=yes|QUALIFIED|AUD-P1-001`
+- `.github/workflows/m6-qualification.yml|856c68ff07bb21fa3a1b7363aa0788c91de07235|ACTIVE_WORKFLOW|exact-SHA qualification and dependency enforcement|GitHub Actions|tests+production lock|workflow=yes|QUALIFIED|AUD-P1-001`
+- `.github/workflows/publish.yml|32a9a402f0c740c781820e44d3811a2d02bed70b|ACTIVE_WORKFLOW|manual non-publishing draft generation|GitHub Actions|production agents+lock|workflow=yes|QUALIFIED_STATIC_CONTRACT|AUD-P1-001`
+- `tests/test_pre_m7_dependency_contracts.py|715c33746ba2e393dca679b9db4bf398b60b8f80|REQUIRED_TEST|dependency/workflow reproducibility regression|pytest|qualification workflow|test=yes|QUALIFIED|AUD-P1-001`
+
+Safety invariants unchanged: frozen storyboard `ddd55af7ed3f7bd418b078140909750d758519bb`; frozen Ryan/Qwen identity unchanged; no publishing/upload invoked.
