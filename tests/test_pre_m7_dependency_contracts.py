@@ -60,5 +60,5 @@ def test_python_and_runner_identity_are_explicit() -> None:
     publish = PUBLISH.read_text(encoding="utf-8")
     assert "runs-on: ubuntu-24.04" in qualification
     assert "runs-on: ubuntu-24.04" in publish
-    assert "python-version: '3.11'" in qualification
-    assert 'python-version: "3.11"' in publish
+    assert "python-version: '3.11.17'" in qualification
+    assert 'python-version: "3.11.17"' in publish
