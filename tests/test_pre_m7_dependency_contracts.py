@@ -9,7 +9,7 @@ CONSTRAINTS = ROOT / "constraints" / "m6-qualification.txt"
 QUALIFICATION = ROOT / ".github" / "workflows" / "m6-qualification.yml"
 PUBLISH = ROOT / ".github" / "workflows" / "publish.yml"
 
-_NAME = re.compile(r"^\\s*([A-Za-z0-9_.-]+)")
+_NAME = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
 
 
 def _normalize(name: str) -> str:
