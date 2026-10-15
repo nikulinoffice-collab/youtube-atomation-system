@@ -25,7 +25,7 @@ Status: IN_PROGRESS
 | ID | Severity | Finding | Status |
 |---|---|---|---|
 | AUD-P1-001 | P1 | Draft workflow installs `requirements.txt`, but the validated Ryan runtime dependencies `qwen-tts==0.1.1` and `whisperx==3.8.6` were absent. | FIX_COMMITTED; exact-SHA qualification pending |
-| AUD-P1-002 | P1 | Script topic history previously used `agents/output/recent_topics.json`; production code now uses canonical `agents/state/recent_topics.json` with state-directory creation and contract tests. | COMMITTED (`22626f8b`, tests `36357bd5`); exact-SHA qualification pending |
+| AUD-P1-002 | P1 | Script topic history previously used `agents/output/recent_topics.json`; production code now uses canonical `agents/state/recent_topics.json` with state-directory creation and contract tests. DIRECT_BLOCKS=[5,7,10]. | CLOSED — implementation `22626f8b` and tests `36357bd5` are contained in exact-SHA-qualified `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS and executed the state-contract test suite. |
 | AUD-P1-003 | P1 | Cross-run anti-repeat state is not persisted by the read-only draft workflow. | OPEN; design/fail-closed resolution required |
 | AUD-P1-004 | P1 | `upload_agent.py` independently executable publishing entry point remediated with default-private plus explicit `YOUTUBE_PUBLISH_AUTHORIZED=true` as the first `main()` operation before artifact discovery/OAuth/API/network. DIRECT_BLOCKS=[8,10]. | CLOSED — corrected implementation `94b0f477b54b9f0655c8b627f66335eb7fa9b6f4` contained in exact-SHA-qualified `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS. |
 | AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913` |
@@ -108,3 +108,13 @@ The dependency drift fix was committed first. Continue from live HEAD, qualify a
 - Finding dependency map remains scoped: AUD-P1-003 DIRECT_BLOCKS=[5,6,7,10]; visual-contract P1 DIRECT_BLOCKS=[5,7,10]; provenance/data-contract P1 DIRECT_BLOCKS=[5,7,10]. Qualification blind-spot remediation is contained in the qualified executable SHA; it does not block Gates 2/3/8.
 - Inventory remains classified 106/106, UNKNOWN=0. Executable/config audit remains 69/69.
 - Safety invariants preserved: `factory-v1-storyboard` unchanged at `ddd55af7ed3f7bd418b078140909750d758519bb`; no publishing/upload invoked; frozen Ryan/Qwen identity/quality parameters unchanged.
+
+
+## Closure synchronization — 2026-10-15
+- Live active HEAD: `0ded47e7d44e212b912d346d6f8e1ecaa856c6ad`; no executable/config drift since the previously verified differential checkpoint.
+- Latest exact-SHA-qualified executable remains `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS.
+- AUD-P1-002 is CLOSED: implementation `22626f8b` plus regression tests `36357bd5` are ancestors of the qualified executable SHA, the qualifying suite executed the state-contract tests, and no later executable drift invalidates the fix.
+- Current tracked inventory accounting: 112/112 classified; UNKNOWN=0. Gate 1 remains PASS.
+- Current first-party executable/config/runtime-significant accounting: 70/70 exact blobs audited, including the dependency-control constraints file. Gate 3 remains PASS.
+- P0 open: 0.
+- Safety invariants preserved: `factory-v1-storyboard` remains frozen; publishing/upload was not invoked; frozen Ryan/Qwen identity/quality parameters are unchanged.
