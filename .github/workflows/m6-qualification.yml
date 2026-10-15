@@ -17,6 +17,7 @@ on:
       - 'config/**'
       - 'tests/**'
       - 'requirements.txt'
+      - 'constraints/**'
       - '.github/workflows/m6-qualification.yml'
       - '.github/workflows/m6-9-production-canary.yml'
       - '.github/workflows/publish.yml'
@@ -32,8 +33,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install qualification dependencies
-        run: python -m pip install pytest feedparser python-dotenv google-genai
+      - name: Install full production dependencies under qualified constraints
+        run: |
+          python -m pip install -r requirements.txt -c constraints/m6-qualification.txt
+          python -m pip install pytest==9.1.1
+          python -m pip check
+      - name: Record resolved production dependency identity
+        run: |
+          python -m pip freeze | LC_ALL=C sort
       - name: Record qualification identity
         run: |
           echo "M6 milestone: ${{ inputs.milestone || 'm6.8' }}"
