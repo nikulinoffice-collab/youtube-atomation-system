@@ -1,6 +1,23 @@
-# Exact direct dependencies for PRE-M7 M6 qualification.
-# Versions are frozen from the last successful exact-SHA qualification environment.
-pytest==9.1.1
-feedparser==6.0.14
-python-dotenv==1.2.4
+# Canonical production direct-dependency constraints for PRE-M7.
+# Derived from exact-SHA bootstrap qualification:
+#   SHA ba3c9c2f9b0727f5bfaaedcae8131d70d4987732
+#   M6 Qualification run 38701694690 / job 116311168060
+#   Python 3.11.17 / ubuntu-24.04 / pip check PASS
+#
+# All direct production requirements are exact-pinned here. Both qualification
+# and draft-generation workflows must install requirements.txt through this file.
 google-genai==2.28.0
+python-dotenv==1.2.4
+feedparser==6.0.14
+edge-tts==7.3.1
+requests==2.34.2
+google-api-python-client==2.201.0
+google-auth-httplib2==0.4.4
+google-auth-oauthlib==1.5.0
+gspread==6.2.1
+playwright==1.64.0
+qwen-tts==0.1.1
+whisperx==3.8.6
+
+# Qualification-only dependency.
+pytest==9.1.1
