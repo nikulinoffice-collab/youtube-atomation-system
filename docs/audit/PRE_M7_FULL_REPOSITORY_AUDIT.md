@@ -44,8 +44,8 @@ Status: IN_PROGRESS
 - Frozen Ryan/Qwen identity/quality parameters have not been modified.
 
 ## Current checkpoint
-- Latest exact-SHA-qualified executable/config revision: `0ad2953c45e81ca31e08d86107804390d7400245`.
-- M6 Qualification run `39932656805`, job `120344462909`: SUCCESS; `160 passed, 1 skipped`; locked production install and `pip check` PASS.
+- Latest independently verified exact-SHA-qualified executable/config revision: `058d13067fab1a4792de1336aa2becc7a8f40d2a`.
+- M6 Qualification run `39939650583`, job `120367642155`: SUCCESS; `176 passed, 1 skipped`; locked production install and `pip check` PASS. Subsequent provenance hardening is EXACT_SHA_PENDING.
 - Formal Gates PASS: 1, 2, 3, 4, 6, 8 = 6/10.
 - P0 open: 0.
 - AUD-P1-001, AUD-P1-002, AUD-P1-003, AUD-P1-004, AUD-P1-005, AUD-P1-007 and AUD-P1-008 are CLOSED.
@@ -199,3 +199,16 @@ Safety invariants unchanged: frozen storyboard `ddd55af7ed3f7bd418b078140909750d
 - `agents/video_agent.py|953af875127e643403eba426d01f65af48b7edb4|ACTIVE_RUNTIME|exact script selection preserving M6.9 resolver|script+assets+voice|renderer|runtime=yes|QUALIFIED|AUD-P1-006`
 - `agents/qc_agent.py|49fb35c2d4c00bc2e2942c19c57762548795f0e9|ACTIVE_RUNTIME|exact script selection|production artifacts|QC report|runtime=yes|QUALIFIED|AUD-P1-006`
 - `.github/workflows/publish.yml|34fe315d68a4773a5c2938ef53afc7abd56a470e|ACTIVE_WORKFLOW|export unique active-run timestamp|script generation|downstream draft steps|workflow=yes|QUALIFIED_STATIC_CONTRACT|AUD-P1-006`
+
+
+## Closure-first execution checkpoint — 2026-10-23 script provenance hardening
+- Active HEAD before documentation sync: `bc1d19f5fbf82da05433a87603a21955b76e993f`. Frozen `factory-v1-storyboard` remains `ddd55af7ed3f7bd418b078140909750d758519bb`.
+- AUD-P1-006 remains READY_TO_FIX and DIRECT_BLOCKS=[5,7,10]. Coherent first-boundary remediation committed (not yet CLOSED): `agents/script_agent.py@e314155be10ca2bd42d14cd5e28bed9df7bd9f74` stamps script producer/schema/run identity and canonical payload SHA-256; `scripts/m6_run_provenance.py@96ace277b7cb7375d3672f5862d605e8af7d746d` rejects wrong producer/schema/run, malformed JSON, missing fields, and modified payload before TTS selection; `tests/test_pre_m7_run_provenance.py@592f40fdb91bfe8c5fafdb8e880619f94c2a4e01` adds adversarial wrong-producer/schema/run, restored-cache tamper, missing-digest, and corrupt-JSON tests. Existing Ryan/Qwen identity, parameters, publishing authorization, and frozen storyboard are untouched.
+- Implementation commits in sequence: `806faac1055f0e6399f6752b594f9f8d1bc2f5aa`, `dcc6b11ca8671cf9b8352fc421b0bfdac3ea1026`, `bc1d19f5fbf82da05433a87603a21955b76e993f`. GitHub Contents writes and read-back succeeded: GLOBAL_MUTATION_CAPABILITY=AVAILABLE. These sequential commits are connector-forced intermediate states; only final executable SHA `bc1d19f5fbf82da05433a87603a21955b76e993f` is eligible for new qualification.
+- EXACT_SHA_PENDING: new Actions M6 Qualification for `bc1d19f5fbf82da05433a87603a21955b76e993f` has not been verified. The connector's commit-workflow-runs endpoint exposes only PR-triggered runs and returns zero even for previously verified successful push SHA `058d13067fab1a4792de1336aa2becc7a8f40d2a`; therefore absence of results is NOT evidence of a failed or absent push run. Do not claim qualification or P1 closure until exact run/job/steps are verified.
+- Dynamic tracked denominator unchanged: 116/116 classified, UNKNOWN=0. Executable/config/test/workflow denominator unchanged: 74/74; the three changed exact blobs above were differentially inspected. Gates PASS remain 1,2,3,4,6,8 = 6/10; delta PASS=0; P0 open=0; P1 CLOSED=7, READY_TO_FIX=1; delta CLOSED=0. No fixture canary is counted as clean-room E2E.
+- Next priority: obtain and inspect push-triggered M6 Qualification on exact SHA `bc1d19f5fbf82da05433a87603a21955b76e993f`; fix CI failure if any, then extend AUD-P1-006 producer/schema/source-hash checks across narration timeline -> storyboard -> candidates/assets -> renderer/QC, with focused adversarial regressions before Gate5/Gate7 closure. No unrelated discovery.
+### AUDIT_CURSOR delta — script provenance
+- `agents/script_agent.py|e314155be10ca2bd42d14cd5e28bed9df7bd9f74|ACTIVE_RUNTIME|stamp script producer/schema/run and canonical payload digest|RSS/Gemini script generation|voice_agent|runtime=yes|EXACT_SHA_PENDING|AUD-P1-006`
+- `scripts/m6_run_provenance.py|96ace277b7cb7375d3672f5862d605e8af7d746d|REQUIRED_RUNTIME|reject mismatched script producer/schema/run/content before TTS|script JSON|all select_run_artifact consumers|runtime=yes|EXACT_SHA_PENDING|AUD-P1-006`
+- `tests/test_pre_m7_run_provenance.py|592f40fdb91bfe8c5fafdb8e880619f94c2a4e01|REQUIRED_TEST|adversarial producer/schema/run/restored-cache corruption tests|pytest|M6 Qualification|test=yes|EXACT_SHA_PENDING|AUD-P1-006`
