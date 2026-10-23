@@ -10,6 +10,7 @@ asset is the first technically eligible candidate in deterministic strategy orde
 import json
 import os
 from pathlib import Path
+from scripts.m6_run_provenance import select_run_artifact
 from typing import Any
 
 import requests
@@ -39,10 +40,7 @@ class AssetAcquisitionError(RuntimeError):
 
 
 def find_latest_storyboard() -> Path:
-    files = sorted(OUTPUT_DIR.glob("storyboard_[0-9]*.json"))
-    if not files:
-        raise SystemExit("No storyboard_<timestamp>.json found. Run storyboard_agent.py first.")
-    return files[-1]
+    return select_run_artifact(OUTPUT_DIR, "storyboard_", "storyboard_[0-9]*.json")
 
 
 def load_used_ids(limit: int = 500) -> set[str]:
