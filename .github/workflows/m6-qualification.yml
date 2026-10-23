@@ -75,3 +75,102 @@ jobs:
       - name: Qualify M6.9 production migration gate with M6.1-M6.8 regressions
         if: ${{ inputs.milestone == 'm6.9' || github.event_name == 'push' }}
         run: python -m pytest -q tests
+
+  pre_m7_cleanroom_e2e:
+    name: PRE-M7 Gate10 one-shot real clean-room nonpublishing E2E
+    needs: qualify
+    if: github.event_name == 'push' && github.event.head_commit.message == 'PRE-M7 Gate10: run one-shot clean-room nonpublishing E2E'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Exact-SHA fresh checkout and no stale output
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify clean revision
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          rm -rf agents/output
+          mkdir -p agents/output
+          test -z "$(find agents/output -mindepth 1 -print -quit)"
+      - name: Set up frozen Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.17'
+      - name: Install locked runtime and visual tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          python -m pip install -r requirements.txt -c constraints/m6-qualification.txt
+          python -m pip check
+          python -m playwright install --with-deps chromium
+      - name: Preflight existing free-tier credentials and nonpublishing Ryan route
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          test -n "$GEMINI_API_KEY" || { echo "MISSING_EXISTING_GEMINI_KEY"; exit 1; }
+          test -n "$PEXELS_API_KEY" || { echo "MISSING_EXISTING_PEXELS_KEY"; exit 1; }
+          python - <<'PY'
+          from scripts.m6_production_route import load_route, active_backend
+          route=load_route()
+          assert route["publishing_enabled"] is False
+          assert active_backend(route)=="m6-ryan"
+          PY
+      - name: Real topic research and script, no fixture or restored cache
+        working-directory: agents
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python script_agent.py
+          python - <<'PY' >> "$GITHUB_ENV"
+          from pathlib import Path
+          import re
+          files=list(Path("output").glob("script_[0-9]*.json"))
+          assert len(files)==1, "RUN_PROVENANCE_EXPECTED_ONE_SCRIPT"
+          stamp=files[0].stem.removeprefix("script_")
+          assert re.fullmatch(r"[0-9]{8}T[0-9]{6}Z",stamp)
+          print("FACTORY_RUN_TIMESTAMP="+stamp)
+          PY
+      - name: Real Ryan TTS alignment timeline storyboard visual retrieval ranking captions render QC
+        working-directory: agents
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          python voice_agent.py
+          python captions_agent.py
+          python storyboard_agent.py
+          python visuals_m53_agent.py
+          python video_agent.py
+          python qc_agent.py
+      - name: Verify exact-run provenance package and 1080x1920 30fps MP4 locally
+        run: |
+          python scripts/m6_production_package_gate.py --output-dir agents/output --timestamp "$FACTORY_RUN_TIMESTAMP"
+          python - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          out=Path("agents/output"); stamp=os.environ["FACTORY_RUN_TIMESTAMP"]
+          names=["script","narration_timeline","m6_alignment","storyboard","candidate_manifest","asset_manifest","renderer_manifest","qc_report"]
+          for name in names:
+              p=out/f"{name}_{stamp}.json"
+              assert p.is_file() and p.stat().st_size, f"MISSING_REAL_STAGE:{name}"
+          timeline=json.loads((out/f"narration_timeline_{stamp}.json").read_text())
+          assets=json.loads((out/f"asset_manifest_{stamp}.json").read_text())
+          candidates=json.loads((out/f"candidate_manifest_{stamp}.json").read_text())
+          qc=json.loads((out/f"qc_report_{stamp}.json").read_text())
+          assert timeline.get("voice")=="Ryan" and timeline.get("source")=="m6.9-qwen3-ryan-whisperx"
+          assert qc.get("status")=="PASS" and candidates.get("scenes")
+          assert assets.get("assets") and any(a.get("provider")=="pexels" for a in assets["assets"]), "NO_REAL_RETRIEVAL"
+          mp4=out/f"final_{stamp}.mp4"
+          assert mp4.is_file() and mp4.stat().st_size
+          streams=json.loads(subprocess.check_output(["ffprobe","-v","error","-show_streams","-of","json",str(mp4)],text=True))["streams"]
+          v=next(s for s in streams if s.get("codec_type")=="video")
+          assert (v["width"],v["height"],v["r_frame_rate"])==(1080,1920,"30/1"), "BAD_OUTPUT_FORMAT"
+          assert any(s.get("codec_type")=="audio" for s in streams), "NO_AUDIO"
+          print(json.dumps({"gate":10,"kind":"REAL_NONPUBLISHING_CLEANROOM","sha":os.environ["GITHUB_SHA"],"status":"PASS","scenes":len(assets["assets"]),"qc":qc["status"],"media_uploaded":False,"published":False}))
+          PY
