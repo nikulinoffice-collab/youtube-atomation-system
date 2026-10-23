@@ -181,3 +181,40 @@ def verify_visual_chain(output_dir: Path, run_timestamp: str) -> None:
         media_paths.append(path)
     verify_json_artifact(assets_path, "pre-m7.assets.v1", "agents.visuals_m53_agent",
                          run_timestamp, (candidates, *media_paths))
+
+def verify_render_chain(output_dir: Path, run_timestamp: str) -> None:
+    """Reject renderer or MP4 assembled from stale visual, voice, or caption bytes."""
+    verify_visual_chain(output_dir, run_timestamp)
+    from scripts.m6_production_media import resolve_voice_artifact, ProductionMediaError
+    output_dir = Path(output_dir)
+    try:
+        voice = resolve_voice_artifact(output_dir, run_timestamp)
+    except ProductionMediaError as exc:
+        raise SystemExit(str(exc)) from exc
+    assets = output_dir / f"asset_manifest_{run_timestamp}.json"
+    captions = output_dir / f"captions_{run_timestamp}.srt"
+    final = output_dir / f"final_{run_timestamp}.mp4"
+    renderer = output_dir / f"renderer_manifest_{run_timestamp}.json"
+    verify_json_artifact(renderer, "pre-m7.renderer.v1", "agents.video_agent",
+                         run_timestamp, (assets, voice, captions, final))
+    data = json.loads(renderer.read_text(encoding="utf-8"))
+    if (data.get("schema_version") != 2 or data.get("milestone") != "M5.4"
+            or data.get("timestamp") != run_timestamp):
+        raise SystemExit("Renderer producer/schema/run contract mismatch")
+
+
+def verify_package_chain(output_dir: Path, run_timestamp: str) -> None:
+    """Require QC provenance over exact renderer, final MP4, and visual QC evidence."""
+    verify_render_chain(output_dir, run_timestamp)
+    output_dir = Path(output_dir)
+    renderer = output_dir / f"renderer_manifest_{run_timestamp}.json"
+    final = output_dir / f"final_{run_timestamp}.mp4"
+    visual_qc = output_dir / f"visual_qc_report_{run_timestamp}.json"
+    selection = output_dir / f"visual_selection_report_{run_timestamp}.md"
+    qc = output_dir / f"qc_report_{run_timestamp}.json"
+    verify_json_artifact(qc, "pre-m7.qc.v1", "agents.qc_agent",
+                         run_timestamp, (renderer, final, visual_qc, selection))
+    data = json.loads(qc.read_text(encoding="utf-8"))
+    if (data.get("schema_version") != 2 or data.get("milestone") != "M5.5"
+            or data.get("status") != "PASS" or data.get("timestamp") != run_timestamp):
+        raise SystemExit("QC producer/schema/run/PASS contract mismatch")
