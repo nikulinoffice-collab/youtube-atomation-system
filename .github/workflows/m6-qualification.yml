@@ -117,11 +117,12 @@ jobs:
         run: |
           test -n "$GEMINI_API_KEY" || { echo "MISSING_EXISTING_GEMINI_KEY"; exit 1; }
           test -n "$PEXELS_API_KEY" || { echo "MISSING_EXISTING_PEXELS_KEY"; exit 1; }
-          python - <<'PY'
+          python - <<'PY' >> "$GITHUB_ENV"
           from scripts.m6_production_route import load_route, active_backend
           route=load_route()
           assert route["publishing_enabled"] is False
           assert active_backend(route)=="m6-ryan"
+          print(f"FACTORY_VOICE_BACKEND={active_backend(route)}")
           PY
       - name: Real topic research and script, no fixture or restored cache
         working-directory: agents
