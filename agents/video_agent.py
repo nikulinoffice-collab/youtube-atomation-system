@@ -1,6 +1,7 @@
 """M5.4 storyboard renderer; M6.9 narration media is resolved fail-closed."""
 import html, json, random, subprocess
 from pathlib import Path
+from scripts.m6_run_provenance import select_run_artifact
 from urllib.parse import urlparse
 from scripts.m6_production_media import ProductionMediaError, resolve_voice_artifact
 
@@ -11,9 +12,10 @@ ALLOWED_MOTIONS={"static","slow_push_in","slow_pull_out","pan_left","pan_right"}
 SUBTITLE_STYLE="FontName=Arial,FontSize=16,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=120"
 
 def find_latest(pattern):
-    m=sorted(OUTPUT_DIR.glob(pattern))
-    if not m: raise SystemExit(f"No files matching {pattern} in agents/output/. Run earlier steps first.")
-    return m[-1]
+    if pattern != "script_[0-9]*.json":
+        raise SystemExit(f"Unsupported unbound artifact discovery: {pattern}")
+    return select_run_artifact(OUTPUT_DIR, "script_", "script_[0-9]*.json")
+
 def run(cmd):
     r=subprocess.run(cmd,capture_output=True,text=True)
     if r.returncode: print(r.stderr[-4000:]); raise SystemExit(f"Command failed: {' '.join(cmd)}")
