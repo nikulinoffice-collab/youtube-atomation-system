@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from scripts.m6_run_provenance import select_run_artifact, stamp_json_artifact, verify_visual_chain
+from scripts.m6_run_provenance import select_run_artifact, stamp_json_artifact, verify_visual_chain, verify_render_chain, verify_package_chain
 
 
 def valid_script(stamp):
@@ -313,6 +313,93 @@ def test_visual_provenance_is_produced_and_enforced_before_render_qc():
     producer = (root / "visuals_m53_agent.py").read_text(encoding="utf-8")
     assert "pre-m7.candidates.v1" in producer and "pre-m7.assets.v1" in producer
     assert producer.count("stamp_json_artifact(") == 2
-    for name in ("video_agent.py", "qc_agent.py"):
-        source = (root / name).read_text(encoding="utf-8")
-        assert "verify_visual_chain(OUTPUT_DIR, timestamp)" in source
+    video = (root / "video_agent.py").read_text(encoding="utf-8")
+    qc = (root / "qc_agent.py").read_text(encoding="utf-8")
+    assert "verify_visual_chain(OUTPUT_DIR, timestamp)" in video
+    assert "verify_render_chain(OUTPUT_DIR, timestamp)" in qc
+
+@pytest.fixture
+def bound_render_chain(bound_visual_chain):
+    folder, _, assets, _ = bound_visual_chain
+    stamp = "20261023T120000Z"
+    voice = folder / f"voice_{stamp}.wav"
+    voice.write_bytes(b"qualified-fixture-voice")
+    captions = folder / f"captions_{stamp}.srt"
+    captions.write_text("1\\n00:00:00,000 --> 00:00:01,000\\nTest\\n", encoding="utf-8")
+    final = folder / f"final_{stamp}.mp4"
+    final.write_bytes(b"qualified-fixture-video")
+    renderer = folder / f"renderer_manifest_{stamp}.json"
+    renderer_data = stamp_json_artifact(
+        {"schema_version": 2, "milestone": "M5.4", "timestamp": stamp, "segments": []},
+        "pre-m7.renderer.v1", "agents.video_agent", stamp,
+        (assets, voice, captions, final),
+    )
+    renderer.write_text(json.dumps(renderer_data), encoding="utf-8")
+    visual_qc = folder / f"visual_qc_report_{stamp}.json"
+    visual_qc.write_text('{"status":"PASS"}', encoding="utf-8")
+    selection = folder / f"visual_selection_report_{stamp}.md"
+    selection.write_text("Fixture-only visual selection", encoding="utf-8")
+    qc = folder / f"qc_report_{stamp}.json"
+    qc_data = stamp_json_artifact(
+        {"schema_version": 2, "milestone": "M5.5", "status": "PASS", "timestamp": stamp},
+        "pre-m7.qc.v1", "agents.qc_agent", stamp,
+        (renderer, final, visual_qc, selection),
+    )
+    qc.write_text(json.dumps(qc_data), encoding="utf-8")
+    return folder, voice, captions, final, renderer, qc, visual_qc, selection
+
+
+def test_bound_render_and_package_chains_accept_exact_bytes(bound_render_chain):
+    folder = bound_render_chain[0]
+    verify_render_chain(folder, "20261023T120000Z")
+    verify_package_chain(folder, "20261023T120000Z")
+
+
+@pytest.mark.parametrize("index", [1, 2, 3])
+def test_bound_renderer_rejects_stale_voice_captions_mp4(bound_render_chain, index):
+    path = bound_render_chain[index]
+    path.write_bytes(path.read_bytes() + b"tamper")
+    with pytest.raises(SystemExit, match="upstream source digest mismatch"):
+        verify_render_chain(bound_render_chain[0], "20261023T120000Z")
+
+
+@pytest.mark.parametrize("field,bad", [
+    ("producer", "agents.untrusted_video"),
+    ("contract", "pre-m7.qc.v1"),
+    ("run_timestamp", "20261024T120000Z"),
+])
+def test_bound_renderer_rejects_wrong_identity(bound_render_chain, field, bad):
+    path = bound_render_chain[4]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["artifact_provenance"][field] = bad
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="provenance mismatch"):
+        verify_render_chain(bound_render_chain[0], "20261023T120000Z")
+
+
+@pytest.mark.parametrize("index", [4, 6, 7])
+def test_bound_package_rejects_changed_renderer_visual_qc_selection(bound_render_chain, index):
+    path = bound_render_chain[index]
+    path.write_bytes(path.read_bytes() + b"tamper")
+    with pytest.raises(SystemExit, match="upstream source digest mismatch|content digest mismatch"):
+        verify_package_chain(bound_render_chain[0], "20261023T120000Z")
+
+
+def test_bound_package_rejects_qc_status_substitution(bound_render_chain):
+    path = bound_render_chain[5]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["status"] = "PASS_FROM_OTHER_RUN"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="content digest mismatch"):
+        verify_package_chain(bound_render_chain[0], "20261023T120000Z")
+
+
+def test_renderer_qc_and_package_producers_enforce_bound_chain():
+    root = Path(__file__).resolve().parents[1]
+    video = (root / "agents/video_agent.py").read_text(encoding="utf-8")
+    qc = (root / "agents/qc_agent.py").read_text(encoding="utf-8")
+    package = (root / "scripts/m6_production_package_gate.py").read_text(encoding="utf-8")
+    assert 'stamp_json_artifact(renderer_payload, "pre-m7.renderer.v1"' in video
+    assert 'verify_render_chain(OUTPUT_DIR, timestamp)' in qc
+    assert 'stamp_json_artifact(report, "pre-m7.qc.v1"' in qc
+    assert "verify_package_chain(output_dir, timestamp)" in package
