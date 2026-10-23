@@ -1,6 +1,6 @@
 # PRE-M7 Full Repository Audit
 
-Status: IN_PROGRESS
+Status: PASS — PRE-M7 FULL REPOSITORY AUDIT COMPLETE (2026-10-23)
 
 ## Baseline
 - Active branch: `factory-v1-voice-m6`
@@ -19,7 +19,7 @@ Status: IN_PROGRESS
 7. Tests/QC/fail-closed — PASS
 8. Security/cost/publishing — PASS
 9. Controlled cleanup/refactor — PASS
-10. Clean-room E2E qualification — NOT_STARTED
+10. Clean-room E2E qualification — PASS
 
 ## Findings ledger
 | ID | Severity | Finding | Status |
@@ -32,6 +32,7 @@ Status: IN_PROGRESS
 | AUD-P1-006 | P1 | Run-bound producer/schema/payload/upstream SHA-256 integrity across script, narration timeline, storyboard, ranked candidate and asset manifests, selected media, renderer, final MP4 and QC/package. DIRECT_BLOCKS=[5,7,10]; Gate10 additionally requires clean-room E2E independent of this finding. | CLOSED — all producer/consumer integrity checks and adversarial regressions qualified at executable SHA `747adc016cab245959d4e3e45d427d1ea67e09a2`, M6 Qualification run `39961880015`, job `120441632589` SUCCESS (221 passed, 1 skipped; locked install, `pip check` PASS). Renderer/QC and package checks reject stale, wrong-producer/schema/run, tampered source/media, and restored-cache substitutions; final clean-room production E2E remains Gate10, not a P1 closure substitute. |
 | AUD-P1-007 | P1 | Qualification previously had watched-path and test-discovery blind spots. DIRECT_BLOCKS=[6,7,10] because changes could evade executable qualification and regression. | CLOSED — `.github/workflows/m6-qualification.yml@f6bc535beabd9718add211c705c02306dd3971f6` watches all three workflows, runtime directories, production lock and benchmark corpus; push/M6.9 runs all `tests/`. Focused regression `tests/test_pre_m7_dependency_contracts.py@b60b3e5852b59e4d524d28a96c3d47b67acdcf00` executed in exact-SHA M6 Qualification `39925566753`, job `120320966484`, SUCCESS (144 passed / 1 skipped). |
 | AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. DIRECT_BLOCKS=[6,7,10]. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913`; fix remains contained in latest qualified executable `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`. |
+| AUD-P1-009 | P1 | Gate10 one-shot workflow validated the committed Ryan route but did not export it to downstream voice generation, so the real clean-room run silently selected Edge rollback. DIRECT_BLOCKS=[10] only; the normal draft workflow already exported the Ryan route. | CLOSED — `.github/workflows/m6-qualification.yml@eda36200b5a4ed113abd1f7b5d6c7446450b271b` exports validated `FACTORY_VOICE_BACKEND=m6-ryan` via `GITHUB_ENV`; focused regression `tests/test_pre_m7_dependency_contracts.py@42852567756895ef861861ea7d7adac4a5bf77ac` executed in exact-SHA qualification `40004314075` / job `120588205873` (SUCCESS, 224 passed / 1 skipped) on `65bad44978d7b2a4f3509eb21ef48c760bf3ab9b`. Real Ryan clean-room job `120589521499` SUCCESS on the same SHA; no publishing/upload. |
 | AUD-P2-001 | P2 | README and module documentation previously described legacy Edge/automatic publishing. | CLOSED — README and voice/captions module headers corrected at qualified HEAD `a5c57ca8f571980ca064c18e3c9672617c4a67ba`; manual draft-only Ryan route and explicit Edge rollback now documented. |
 | AUD-P2-002 | P2 | M5 storyboard/retrieval/ranking guarantees rely heavily on workflow inline assertions rather than a dedicated regression test layer. | OPEN |
 | AUD-P3-001 | P3 | Temporary M6.9 canary workflow remains after M6.9 closure. | REVIEW after audit evidence no longer depends on it |
@@ -44,13 +45,14 @@ Status: IN_PROGRESS
 - Frozen Ryan/Qwen identity/quality parameters have not been modified.
 
 ## Current checkpoint
-- Latest independently verified exact-SHA-qualified executable/config/test revision: `a5c57ca8f571980ca064c18e3c9672617c4a67ba`.
-- M6 Qualification run `39961880015`, job `120441632589`: SUCCESS, 221 passed / 1 skipped; canonical locked production installation and `pip check` PASS. Focused run-provenance and adversarial tests executed on exact SHA.
-- Formal Gates PASS: 1, 2, 3, 4, 5, 6, 7, 8, 9 = 9/10. Gate 10 NOT_STARTED pending real clean-room nonpublishing E2E.
-- P0 open: 0. P1 open: 0; all eight AUD-P1-001..008 CLOSED. AUD-P1-006 is CLOSED with exact-SHA qualification.
-- Tracked inventory at current HEAD: 115/115 classified, UNKNOWN=0 (one obsolete closure accumulator deleted). First-party executable/config/test/workflow: 74/74 differentially audited, including changed blobs qualified at current SHA.
-- Frozen storyboard SHA: `ddd55af7ed3f7bd418b078140909750d758519bb` unchanged. No publishing/upload, paid service, new secret, or Ryan/Qwen identity/quality change.
-
+- Formal PRE-M7 audit result: **PASS — 10/10 Gates**; all direct P0/P1 blockers CLOSED and exact final executable qualification verified.
+- Latest independently verified exact-SHA-qualified executable/config/test revision: `65bad44978d7b2a4f3509eb21ef48c760bf3ab9b`.
+- M6 Qualification run `40004314075`, job `120588205873`: SUCCESS, 224 passed / 1 skipped; canonical locked production installation, `pip check`, and focused Gate10 Ryan-route regression PASS.
+- Same run `40004314075`, Gate10 real clean-room E2E job `120589521499`: SUCCESS. Fresh exact-SHA checkout, empty output, real RSS/topic research + Gemini script, validated Qwen3 Ryan WAV + WhisperX alignment + canonical timeline, storyboard, real Pexels visual retrieval/ranking, captions, 11-scene 1080x1920 30fps MP4 render, M5.5 QC PASS, provenance-bound production package PASS. `REAL_NONPUBLISHING_CLEANROOM` exact SHA PASS, `media_uploaded=false`, `published=false`.
+- P0 open: 0. P1 open: 0; all nine AUD-P1-001..009 CLOSED. P2/P3 retained items are documented separately and are not unresolved correctness/safety blockers.
+- Current tracked inventory: 115/115 classified, UNKNOWN=0. Current first-party executable/config/test/workflow inventory: 74/74 differentially audited. The Gate10 change modified two existing runtime-significant blobs and no tracked paths were added/deleted/renamed.
+- Frozen storyboard SHA: `ddd55af7ed3f7bd418b078140909750d758519bb` unchanged. Frozen Ryan/Qwen identity/quality parameters unchanged. No publishing/video upload, paid services, billing, or new secrets. Gate10 workflow has contents:read only and no media artifact upload.
+- GLOBAL_MUTATION_CAPABILITY: AVAILABLE; GitHub Contents writes and exact blob read-back verified. Future invocations: drift-only verification; do not re-run clean-room E2E or change frozen production parameters absent relevant drift.
 ## Closure checkpoint — 2026-10-03
 - Live active HEAD: `36357bd5c9e6f378d7fd167977f3dea86a4f58da`.
 - Frozen `factory-v1-storyboard`: `ddd55af7ed3f7bd418b078140909750d758519bb`; unchanged.
@@ -253,3 +255,12 @@ Safety invariants unchanged: frozen storyboard `ddd55af7ed3f7bd418b078140909750d
 - Exact-SHA M6 Qualification run `39963686148`, job `120447883488`: SUCCESS on `a5c57ca8f571980ca064c18e3c9672617c4a67ba`, 222 passed / 1 skipped, locked production dependency install and `pip check` PASS. M6.9 fixture canary run `39963686087`, job `120447883505`: SUCCESS on the same SHA. Neither is accepted as Gate 10 real clean-room E2E.
 - Dynamic Gate 1 denominator: 115/115 tracked blobs classified, UNKNOWN=0 (116 minus one deleted accumulator). Gate 3 denominator: 74/74 executable/config/test/workflow paths audited; changed existing workflow and regression blobs were differentially reviewed and exact-SHA qualified, with no new runtime-significant path. Gates 1 and 3 retain PASS. P0 open=0; P1 open=0, all eight CLOSED; AUD-P2-001 CLOSED, AUD-P2-002 remains OPEN, AUD-P3-001 remains retained-for-reference.
 - GLOBAL_MUTATION_CAPABILITY=AVAILABLE on successful supported Contents write and read-back. Gate 10 remains NOT_STARTED: it requires a genuinely fresh clean checkout and real Topic→Research→Script→Ryan TTS→WhisperX alignment→canonical timeline→storyboard→real visual retrieval/ranking→captions→1080x1920 30fps render→QC→package, without publishing, media upload, paid services, new secrets, or stale-state fixtures. A green fixture canary does not satisfy this criterion.
+
+## FINAL PASS — Gate10 real clean-room closure — 2026-10-23
+- Pre-fix executable/config/test HEAD `a348f855d375e493d15c56ab7ff74c467a0dc3b3`: M6 Qualification run `39995922627` job `120559296683` SUCCESS, but real E2E job `120560440978` FAILED at final assertion `MISSING_REAL_STAGE:m6_alignment`. Root cause from live job log: `agents/voice_agent.py` selected `Backend: edge`, because the Gate10 preflight checked the committed `m6-ryan` route but did not export `FACTORY_VOICE_BACKEND` to the following steps. This was a workflow propagation defect, not a Ryan/Qwen model or alignment defect; no production identity/quality parameters were changed.
+- Corrected existing workflow blob `.github/workflows/m6-qualification.yml@eda36200b5a4ed113abd1f7b5d6c7446450b271b` and added focused regression in existing `tests/test_pre_m7_dependency_contracts.py@42852567756895ef861861ea7d7adac4a5bf77ac`. The regression asserts validated Ryan backend is exported via `GITHUB_ENV` before real voice generation; it would fail on the prior workflow. Both changed blobs are differentially audited. No tracked file was added, deleted or renamed; Gate1=115/115 UNKNOWN=0 and Gate3=74/74 remain PASS.
+- Final exact executable/config/test SHA: `65bad44978d7b2a4f3509eb21ef48c760bf3ab9b`. Run `40004314075`: qualification job `120588205873` SUCCESS, `224 passed, 1 skipped`, locked dependency installation and `pip check` PASS; real clean-room E2E job `120589521499` SUCCESS. Runner output explicitly shows `FACTORY_VOICE_BACKEND=m6-ryan`, `Backend: m6-ryan`, Ryan WAV, WhisperX alignment file, 11 real ranked visual assets, rendered MP4, QC PASS and `M6_9_PRODUCTION_PACKAGE_PASS`.
+- Exact final Gate10 acceptance output: `{"gate":10,"kind":"REAL_NONPUBLISHING_CLEANROOM","sha":"65bad44978d7b2a4f3509eb21ef48c760bf3ab9b","status":"PASS","scenes":11,"qc":"PASS","media_uploaded":false,"published":false}`. `ffprobe` verified 1080x1920, 30/1 fps and audio stream. This is real source/retrieval/TTS E2E evidence, not the synthetic M6.9 fixture canary.
+- AUD-P1-009 CLOSED, DIRECT_BLOCKS=[10] only. Gates 1–9 remain PASS; Gate10 now formally PASS. P0 open=0; P1 open=0. All 10 Gates PASS with no unresolved correctness/safety blocker. Historical intermediate failures remain recorded; no test/QC assertion was weakened.
+- Frozen `factory-v1-storyboard` SHA `ddd55af7ed3f7bd418b078140909750d758519bb` unchanged; Ryan/Qwen identity/quality parameters preserved. No video upload/publishing, paid services, new secrets, branch protection bypass or low-level ref manipulation. This final ledger synchronization is documentation-only; it does not invalidate exact executable SHA qualification.
+- Future runs must perform drift-only verification, preserving PASS unless an exact changed blob affects an acceptance criterion. The existing automation is not paused, disabled or deleted.
