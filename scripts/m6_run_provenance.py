@@ -130,3 +130,54 @@ def verify_json_artifact(path: Path, contract: str, producer: str,
         raise SystemExit("Run-bound artifact content digest mismatch")
     if identity.get("sources") != _source_digests(source_paths):
         raise SystemExit("Run-bound artifact upstream source digest mismatch")
+
+def verify_visual_chain(output_dir: Path, run_timestamp: str) -> None:
+    """Verify script -> storyboard -> ranked candidates -> media provenance."""
+    if not _RUN_STAMP.fullmatch(run_timestamp):
+        raise SystemExit("Invalid active run for visual provenance")
+    output_dir = Path(output_dir)
+    script = output_dir / f"script_{run_timestamp}.json"
+    timeline = output_dir / f"narration_timeline_{run_timestamp}.json"
+    storyboard = output_dir / f"storyboard_{run_timestamp}.json"
+    candidates = output_dir / f"candidate_manifest_{run_timestamp}.json"
+    assets_path = output_dir / f"asset_manifest_{run_timestamp}.json"
+    verify_script_provenance(script, run_timestamp)
+    verify_json_artifact(timeline, "pre-m7.timeline.v1", "agents.voice_agent",
+                         run_timestamp, (script,))
+    verify_json_artifact(storyboard, "pre-m7.storyboard.v1", "agents.storyboard_agent",
+                         run_timestamp, (timeline,))
+    verify_json_artifact(candidates, "pre-m7.candidates.v1", "agents.visuals_m53_agent",
+                         run_timestamp, (storyboard,))
+    try:
+        candidate_data = json.loads(candidates.read_text(encoding="utf-8"))
+        asset_data = json.loads(assets_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise SystemExit("Invalid visual provenance manifest JSON") from exc
+    if (candidate_data.get("schema_version") != 2
+            or candidate_data.get("milestone") != "M5.3"
+            or candidate_data.get("source_storyboard") != storyboard.name):
+        raise SystemExit("Visual candidate producer/schema/source contract mismatch")
+    if (not isinstance(asset_data, dict)
+            or asset_data.get("schema_version") != 4
+            or asset_data.get("source_storyboard") != storyboard.name
+            or asset_data.get("source_candidate_manifest") != candidates.name):
+        raise SystemExit("Visual asset producer/schema/source contract mismatch")
+    assets = asset_data.get("assets")
+    if not isinstance(assets, list) or not assets:
+        raise SystemExit("Visual asset provenance requires nonempty assets")
+    media_paths = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            raise SystemExit("Invalid visual asset provenance entry")
+        path = Path(str(asset.get("path", "")))
+        if (path.resolve().parent != output_dir.resolve()
+                or not re.fullmatch(
+                    rf"visual_{run_timestamp}_scene_[0-9]{{2}}(?:_source)?\.(?:jpg|mp4)",
+                    path.name,
+                )):
+            raise SystemExit("Visual asset path escapes active-run provenance")
+        if not path.is_file() or path.stat().st_size <= 0:
+            raise SystemExit("Missing or empty visual provenance media")
+        media_paths.append(path)
+    verify_json_artifact(assets_path, "pre-m7.assets.v1", "agents.visuals_m53_agent",
+                         run_timestamp, (candidates, *media_paths))
