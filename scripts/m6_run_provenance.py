@@ -55,6 +55,13 @@ def select_run_artifact(output_dir: Path, prefix: str, pattern: str) -> Path:
             raise SystemExit(f"Missing active-run artifact {selected.name}; refusing stale fallback")
         if prefix == "script_":
             verify_script_provenance(selected, raw)
+        elif prefix in ("narration_timeline_", "storyboard_"):
+            contract, producer, upstream_prefix = {
+                "narration_timeline_": ("pre-m7.timeline.v1", "agents.voice_agent", "script_"),
+                "storyboard_": ("pre-m7.storyboard.v1", "agents.storyboard_agent", "narration_timeline_"),
+            }[prefix]
+            upstream = Path(output_dir) / f"{upstream_prefix}{raw}.json"
+            verify_json_artifact(selected, contract, producer, raw, (upstream,))
         return selected
 
     if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
@@ -65,3 +72,61 @@ def select_run_artifact(output_dir: Path, prefix: str, pattern: str) -> Path:
     if not matches:
         raise SystemExit(f"No {pattern} artifact found; run the upstream stage first")
     return matches[-1]
+
+
+def _payload_digest(data: dict) -> str:
+    payload = {key: value for key, value in data.items() if key != "artifact_provenance"}
+    return hashlib.sha256(json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")).hexdigest()
+
+
+def _source_digests(paths) -> dict[str, str]:
+    digests = {}
+    for raw_path in paths:
+        path = Path(raw_path)
+        if not path.is_file() or not path.name or path.name in digests:
+            raise SystemExit(f"Missing or duplicate upstream provenance source: {path.name}")
+        digests[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digests
+
+
+def stamp_json_artifact(data: dict, contract: str, producer: str,
+                        run_timestamp: str, source_paths) -> dict:
+    """Bind a produced JSON artifact to the exact active run and upstream bytes."""
+    if not isinstance(data, dict) or not _RUN_STAMP.fullmatch(run_timestamp):
+        raise SystemExit("Cannot stamp malformed run-bound artifact")
+    if "artifact_provenance" in data:
+        raise SystemExit("Refusing to overwrite existing artifact provenance")
+    result = dict(data)
+    result["artifact_provenance"] = {
+        "contract": contract,
+        "producer": producer,
+        "run_timestamp": run_timestamp,
+        "payload_sha256": _payload_digest(result),
+        "sources": _source_digests(source_paths),
+    }
+    return result
+
+
+def verify_json_artifact(path: Path, contract: str, producer: str,
+                         run_timestamp: str, source_paths) -> None:
+    """Reject wrong producer/schema/run, changed payload, or stale upstream bytes."""
+    path = Path(path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"Invalid run-bound artifact JSON: {path.name}") from exc
+    if not isinstance(data, dict):
+        raise SystemExit("Run-bound artifact must be a JSON object")
+    identity = data.get("artifact_provenance")
+    if not isinstance(identity, dict) or (
+        identity.get("contract") != contract
+        or identity.get("producer") != producer
+        or identity.get("run_timestamp") != run_timestamp
+    ):
+        raise SystemExit("Run-bound artifact producer/schema/run provenance mismatch")
+    if identity.get("payload_sha256") != _payload_digest(data):
+        raise SystemExit("Run-bound artifact content digest mismatch")
+    if identity.get("sources") != _source_digests(source_paths):
+        raise SystemExit("Run-bound artifact upstream source digest mismatch")
