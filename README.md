@@ -1,132 +1,41 @@
-<h1 align="center">📱 AI News Shorts — Automation Pipeline</h1>
+# AI News Shorts — Manual Draft Pipeline (PRE-M7)
 
-<p align="center">
-  A fully-automated, faceless YouTube Shorts channel that finds real AI/tech
-  news, turns it into a 30-second video, and publishes it — <b>3 times a
-  day, with zero manual work</b>, built entirely on free-tier tools.
-</p>
+This repository generates **nonpublishing** AI/technology news Shorts drafts. The active `factory-v1-voice-m6` branch is under PRE-M7 qualification. Video publishing and uploading are **disabled** in the production route; there is no automatic three-times-daily publishing schedule.
 
-<p align="center">
-  <img src="assets/workflow-diagram.svg" alt="Pipeline workflow diagram" width="100%">
-</p>
+## Current production chain
 
----
+1. Retrieve a real AI/technology news topic from RSS and generate a sourced script using Gemini.
+2. Generate narration with the committed M6.9 **Ryan/Qwen3** route, then align speech using WhisperX and produce the canonical narration timeline. Edge TTS is an explicit rollback route, not the default production voice.
+3. Generate the storyboard, retrieve and rank source/stock visuals, and preserve mandatory Source Cards and controlled still-motion.
+4. Build captions from the canonical timeline, render the 1080 × 1920 / 30 fps MP4, and run technical/visual QC.
+5. Produce a **draft package only**. No YouTube upload, Google Sheets posting, OAuth publishing, or social-media publication is invoked.
 
-## ✨ What this does
+Critical artifacts are bound to the active run and verified using producer/schema identity, payload hashes, and exact upstream media hashes. Missing or mismatched inputs fail closed.
 
-Every run, the pipeline:
+## GitHub Actions
 
-1. 📡 Pulls a fresh AI/tech news story from RSS feeds (TechCrunch, VentureBeat, AI News)
-2. ✍️ Writes a 30-second spoken script for it (Gemini)
-3. 🗣️ Narrates it with a natural TTS voice (Edge-TTS)
-4. 🎞️ Gathers matching vertical footage — stock video, stock photos with a
-   Ken Burns zoom, and a screenshot of the actual source article
-5. 💬 Transcribes the narration and burns in short-form captions (Whisper)
-6. 🎬 Assembles everything — visuals, voice, captions, background music —
-   into a final 1080×1920 video (FFmpeg)
-7. 🚀 Uploads it to YouTube with a custom thumbnail, and logs the result to
-   Google Sheets
+- `.github/workflows/publish.yml` — manually dispatched **Generate Draft Short**; `contents: read`; no upload agent, publishing, or automatic cron.
+- `.github/workflows/m6-qualification.yml` — exact-SHA M6 regression and PRE-M7 contract qualification. A green run does **not** by itself prove the complete real clean-room E2E chain.
+- `.github/workflows/m6-9-production-canary.yml` — historical/temporary Ryan fixture canary, **not** a full production E2E qualification. Retained until evidence/reference cleanup can safely remove it.
 
-...on a schedule, via GitHub Actions — no server, no laptop needing to stay on.
+The draft workflow uses the existing `GEMINI_API_KEY` and `PEXELS_API_KEY` secrets and free-tier APIs. Topic history is persisted through Actions cache; after a cache miss the manual `bootstrap_topic_history` input must be explicitly enabled. Do not enable publishing, introduce new secrets or billing, or bypass the default-deny uploader authorization gate.
 
-## 🗂️ Folder structure
+## Reproducibility and safety
 
-```
-YOUTUBE ATOMATION SYSTEM/
-├── .github/
-│   └── workflows/
-│       └── publish.yml          # cron schedule — runs the whole pipeline 3x/day
-├── agents/
-│   ├── script_agent.py          # Step 1 — news → script (Gemini)
-│   ├── voice_agent.py           # Step 2 — script → narration (Edge-TTS)
-│   ├── visuals_agent.py         # Step 3 — screenshot + stock video/photos (Pexels)
-│   ├── captions_agent.py        # Step 4 — narration → burn-in captions (Whisper)
-│   ├── video_agent.py           # Step 5 — combines everything into the final .mp4
-│   ├── upload_agent.py          # Step 6 — publishes to YouTube + logs to Sheets
-│   ├── state/                   # persisted across runs (committed to git)
-│   │   ├── recent_topics.json   #   → avoids repeating the same news story
-│   │   └── used_visuals.json    #   → avoids repeating the same footage
-│   └── output/                  # per-run artifacts (git-ignored — regenerated each run)
-├── assets/
-│   └── music/                   # royalty-free background tracks (CC0)
-├── .env.example                 # template for local API keys
-├── .gitignore
-├── requirements.txt
-├── upload_log.csv               # local backup log of every upload
-└── README.md
-```
+Production Python dependencies are installed through `requirements.txt` and the shared exact constraints file `constraints/m6-qualification.txt`. Both qualification and draft workflows use the same lock, and `pip check` and regression tests enforce the dependency contract. The validated `qwen-tts==0.1.1` and `whisperx==3.8.6` identities remain frozen.
 
-## 🛠️ Tech stack
+`factory-v1-storyboard` is a frozen reference branch and must never be modified by PRE-M7 work. Ryan/Qwen voice identity and quality parameters, existing QC gates, and explicit authorization boundaries must remain unchanged. For current audit evidence, Gate status, and exact qualification SHAs, consult `docs/audit/PRE_M7_FULL_REPOSITORY_AUDIT.md`.
 
-| Stage | Tool | Cost |
-|---|---|---|
-| Scheduler | GitHub Actions (cron) | Free |
-| Script | Gemini API | Free tier |
-| Voice | Edge-TTS | Free |
-| Visuals | Pexels API + Playwright (screenshots) | Free |
-| Captions | Whisper (local) | Free |
-| Assembly | FFmpeg | Free |
-| Upload | YouTube Data API v3 | Free |
-| Logging | Google Sheets API | Free |
+## Local development
 
-## 🚀 Setup
-
-**1. Install dependencies**
 ```bash
-pip install -r requirements.txt
-playwright install chromium
+python -m pip install -r requirements.txt -c constraints/m6-qualification.txt
+python -m pip check
+python -m playwright install chromium
+python -m pytest -q tests/
 ```
 
-**2. Get your free API keys**
-- Gemini: https://aistudio.google.com/apikey
-- Pexels: https://www.pexels.com/api/
-
-Copy `.env.example` → `.env` and fill in the keys.
-
-**3. YouTube + Google Sheets access**
-
-You'll need a `client_secret.json` (OAuth, for uploading) and a
-`service_account.json` (for Sheets logging) from Google Cloud Console, plus
-a `token.json` generated by running `upload_agent.py` once locally.
-
-**4. Run the full pipeline locally to test**
-```bash
-cd agents
-python script_agent.py
-python voice_agent.py
-python visuals_agent.py
-python captions_agent.py
-python video_agent.py
-python upload_agent.py
-```
-
-**5. Automate it**
-
-Add these as GitHub repo secrets (Settings → Secrets and variables → Actions):
-
-| Secret | Value |
-|---|---|
-| `GEMINI_API_KEY` | from `.env` |
-| `PEXELS_API_KEY` | from `.env` |
-| `GOOGLE_SHEET_ID` | from `.env` |
-| `CLIENT_SECRET_JSON_B64` | base64 of `client_secret.json` |
-| `TOKEN_JSON_B64` | base64 of `token.json` |
-| `SERVICE_ACCOUNT_JSON_B64` | base64 of `service_account.json` |
-
-Then set **Settings → Actions → General → Workflow permissions** to
-"Read and write permissions" (the workflow commits state files back after
-each run). From there, `.github/workflows/publish.yml` runs automatically
-— 7:00 AM, 5:00 PM, and 9:30 PM Colombo time, daily.
-
-## 📝 Notes
-
-- Custom YouTube thumbnails require a phone-verified channel — verify in
-  YouTube Studio → Settings → Channel if thumbnails aren't sticking.
-- OAuth consent screen must be in **Production** (not Testing) mode, or
-  the refresh token expires every 7 days and silently breaks automation.
-- `agents/state/` is intentionally tracked in git — it's what stops the
-  pipeline from repeating the same news story or the same stock footage
-  run after run.
+Local draft generation also requires the existing configured API access and runtime prerequisites. Never invoke `agents/upload_agent.py` as part of audit, qualification, or draft generation.
 
 ---
 
