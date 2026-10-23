@@ -79,7 +79,9 @@ jobs:
   pre_m7_cleanroom_e2e:
     name: PRE-M7 Gate10 one-shot real clean-room nonpublishing E2E
     needs: qualify
-    if: github.event_name == 'push' && github.event.head_commit.message == 'PRE-M7 Gate10: run one-shot clean-room nonpublishing E2E'
+    if: >-
+      github.event_name == 'push' &&
+      github.event.head_commit.message == 'PRE-M7 Gate10: run one-shot clean-room nonpublishing E2E'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
