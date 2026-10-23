@@ -13,7 +13,7 @@ import os
 import re
 import time
 from pathlib import Path
-from scripts.m6_run_provenance import select_run_artifact
+from scripts.m6_run_provenance import select_run_artifact, stamp_json_artifact
 from typing import Any
 
 from dotenv import load_dotenv
@@ -458,6 +458,9 @@ def main() -> None:
     out = OUTPUT_DIR / f"storyboard_{timestamp}.json"
     print(f"🎞️ Planning M5 visual-direction storyboard from {timeline_path.name}...")
     storyboard, repaired = generate_storyboard(timeline, timeline_path.name)
+    storyboard = stamp_json_artifact(
+        storyboard, "pre-m7.storyboard.v1", "agents.storyboard_agent", timestamp, (timeline_path,)
+    )
     out.write_text(json.dumps(storyboard, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"✅ Storyboard saved: {out}")
     print(
