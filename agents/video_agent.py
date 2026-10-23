@@ -1,7 +1,7 @@
 """M5.4 storyboard renderer; M6.9 narration media is resolved fail-closed."""
 import html, json, random, subprocess
 from pathlib import Path
-from scripts.m6_run_provenance import select_run_artifact, verify_visual_chain
+from scripts.m6_run_provenance import select_run_artifact, verify_visual_chain, stamp_json_artifact
 from urllib.parse import urlparse
 from scripts.m6_production_media import ProductionMediaError, resolve_voice_artifact
 
@@ -180,9 +180,15 @@ def main():
     for p in (asset_path,captions):
         if not p.exists(): raise SystemExit(f"Missing {p.name}; earlier stages must complete before rendering.")
     verify_visual_chain(OUTPUT_DIR, timestamp)
+    renderer.unlink(missing_ok=True)
     duration=get_audio_duration(voice_path); manifest=json.loads(asset_path.read_text()); assets=prepare_render_assets(validate_asset_manifest(manifest),json.loads(script_path.read_text()),timestamp); segments=build_render_segments(assets,duration)
     silent=OUTPUT_DIR/f"_silent_{timestamp}.mp4"; build_visuals_segment(segments,silent)
-    renderer.write_text(json.dumps({"schema_version":2,"milestone":"M5.4","timestamp":timestamp,"strategy":"storyboard_scene_start_cuts_with_previous_scene_pause_hold","source_card_strategy":"concise_caption_safe_mobile_card","motion_policy":{"allowed_still_motions":sorted(ALLOWED_MOTIONS),"video_policy":"preserve_native_motion","source_card_policy":"static_for_readability"},"target_width":TARGET_WIDTH,"target_height":TARGET_HEIGHT,"target_fps":TARGET_FPS,"audio_duration":duration,"scene_count":len(segments),"segments":segments},indent=2),encoding="utf-8")
+    renderer_payload = {"schema_version":2,"milestone":"M5.4","timestamp":timestamp,"strategy":"storyboard_scene_start_cuts_with_previous_scene_pause_hold","source_card_strategy":"concise_caption_safe_mobile_card","motion_policy":{"allowed_still_motions":sorted(ALLOWED_MOTIONS),"video_policy":"preserve_native_motion","source_card_policy":"static_for_readability"},"target_width":TARGET_WIDTH,"target_height":TARGET_HEIGHT,"target_fps":TARGET_FPS,"audio_duration":duration,"scene_count":len(segments),"segments":segments}
     subs=escape_for_ffmpeg_filter(captions); cmd=["ffmpeg","-y","-i",str(silent),"-i",str(voice_path),"-filter_complex",f"[0:v]subtitles='{subs}':force_style='{SUBTITLE_STYLE}'[outv]","-map","[outv]","-map","1:a","-c:v","libx264","-pix_fmt","yuv420p","-r",str(TARGET_FPS),"-c:a","aac","-shortest",str(final)]
-    run(cmd); silent.unlink(missing_ok=True); print(f"✅ M5.4 render ready: {final.name}")
+    run(cmd)
+    renderer_payload = stamp_json_artifact(renderer_payload, "pre-m7.renderer.v1",
+                                          "agents.video_agent", timestamp,
+                                          (asset_path, voice_path, captions, final))
+    renderer.write_text(json.dumps(renderer_payload, indent=2), encoding="utf-8")
+    silent.unlink(missing_ok=True); print(f"✅ M5.4 render ready: {final.name}")
 if __name__=="__main__": main()
