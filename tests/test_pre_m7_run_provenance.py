@@ -380,7 +380,7 @@ def test_bound_renderer_rejects_wrong_identity(bound_render_chain, field, bad):
 @pytest.mark.parametrize("index", [4, 6, 7])
 def test_bound_package_rejects_changed_renderer_visual_qc_selection(bound_render_chain, index):
     path = bound_render_chain[index]
-    path.write_bytes(path.read_bytes() + b"tamper")
+    path.write_bytes(path.read_bytes() + (b"\n" if index == 4 else b"tamper"))
     with pytest.raises(SystemExit, match="upstream source digest mismatch|content digest mismatch"):
         verify_package_chain(bound_render_chain[0], "20261023T120000Z")
 
