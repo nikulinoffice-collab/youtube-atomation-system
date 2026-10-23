@@ -7,7 +7,9 @@ both formats, neither format, or mismatched timestamped artifacts is rejected.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
+from scripts.m6_run_provenance import verify_package_chain
 
 from scripts.m6_production_media import ProductionMediaError, resolve_voice_artifact
 
@@ -39,6 +41,11 @@ def verify_production_package(output_dir: Path, timestamp: str) -> Path:
     missing = [name for name, path in required.items() if not path.exists() or path.stat().st_size <= 0]
     if missing:
         raise ProductionMediaError("MISSING_PRODUCTION_ARTIFACTS: " + ",".join(missing))
+    active_run = os.environ.get("FACTORY_RUN_TIMESTAMP")
+    if active_run is not None:
+        if active_run != timestamp:
+            raise ProductionMediaError("RUN_PROVENANCE: package timestamp differs from active run")
+        verify_package_chain(output_dir, timestamp)
     return voice
 
 
