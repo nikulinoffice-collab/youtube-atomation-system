@@ -18,6 +18,7 @@ Run:
 
 import os
 import json
+import hashlib
 import re
 import time
 from datetime import datetime, timezone
@@ -216,6 +217,14 @@ def main():
     data = generate_script()
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    # Run-bound, content-checked producer identity; never alter generated speech text.
+    payload_bytes = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    data["artifact_provenance"] = {
+        "contract": "pre-m7.script.v1",
+        "producer": "agents.script_agent",
+        "run_timestamp": timestamp,
+        "payload_sha256": hashlib.sha256(payload_bytes).hexdigest(),
+    }
     out_path = OUTPUT_DIR / f"script_{timestamp}.json"
     out_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
