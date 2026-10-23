@@ -7,6 +7,7 @@ narration timeline. There is no speech-to-text step.
 
 import json
 from pathlib import Path
+from scripts.m6_run_provenance import select_run_artifact
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 MIN_WORDS = 2
@@ -17,12 +18,7 @@ TERMINAL_PUNCTUATION = (".", "?", "!")
 
 
 def find_latest_timeline() -> Path:
-    files = sorted(OUTPUT_DIR.glob("narration_timeline_*.json"))
-    if not files:
-        raise SystemExit(
-            "No narration_timeline_*.json found in agents/output/. Run voice_agent.py first."
-        )
-    return files[-1]
+    return select_run_artifact(OUTPUT_DIR, "narration_timeline_", "narration_timeline_*.json")
 
 
 def format_srt_timestamp(seconds: float) -> str:
