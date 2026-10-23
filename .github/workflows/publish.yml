@@ -111,7 +111,19 @@ jobs:
         working-directory: agents
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python script_agent.py
+        run: |
+          python script_agent.py
+          python - <<'PY' >> "$GITHUB_ENV"
+          from pathlib import Path
+          import re
+          scripts = list(Path("output").glob("script_[0-9]*.json"))
+          if len(scripts) != 1:
+              raise SystemExit("RUN_PROVENANCE: expected exactly one new script")
+          stamp = scripts[0].stem.removeprefix("script_")
+          if not re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", stamp):
+              raise SystemExit("RUN_PROVENANCE: invalid script timestamp")
+          print("FACTORY_RUN_TIMESTAMP=" + stamp)
+          PY
 
       - name: Persist cross-run topic history before downstream processing
         uses: actions/cache/save@v4
