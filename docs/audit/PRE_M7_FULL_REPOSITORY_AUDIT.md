@@ -18,7 +18,7 @@ Status: IN_PROGRESS
 6. GitHub Actions/automation — PASS
 7. Tests/QC/fail-closed — PASS
 8. Security/cost/publishing — PASS
-9. Controlled cleanup/refactor — READY_TO_FIX
+9. Controlled cleanup/refactor — PASS
 10. Clean-room E2E qualification — NOT_STARTED
 
 ## Findings ledger
@@ -32,7 +32,7 @@ Status: IN_PROGRESS
 | AUD-P1-006 | P1 | Run-bound producer/schema/payload/upstream SHA-256 integrity across script, narration timeline, storyboard, ranked candidate and asset manifests, selected media, renderer, final MP4 and QC/package. DIRECT_BLOCKS=[5,7,10]; Gate10 additionally requires clean-room E2E independent of this finding. | CLOSED — all producer/consumer integrity checks and adversarial regressions qualified at executable SHA `747adc016cab245959d4e3e45d427d1ea67e09a2`, M6 Qualification run `39961880015`, job `120441632589` SUCCESS (221 passed, 1 skipped; locked install, `pip check` PASS). Renderer/QC and package checks reject stale, wrong-producer/schema/run, tampered source/media, and restored-cache substitutions; final clean-room production E2E remains Gate10, not a P1 closure substitute. |
 | AUD-P1-007 | P1 | Qualification previously had watched-path and test-discovery blind spots. DIRECT_BLOCKS=[6,7,10] because changes could evade executable qualification and regression. | CLOSED — `.github/workflows/m6-qualification.yml@f6bc535beabd9718add211c705c02306dd3971f6` watches all three workflows, runtime directories, production lock and benchmark corpus; push/M6.9 runs all `tests/`. Focused regression `tests/test_pre_m7_dependency_contracts.py@b60b3e5852b59e4d524d28a96c3d47b67acdcf00` executed in exact-SHA M6 Qualification `39925566753`, job `120320966484`, SUCCESS (144 passed / 1 skipped). |
 | AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. DIRECT_BLOCKS=[6,7,10]. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913`; fix remains contained in latest qualified executable `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`. |
-| AUD-P2-001 | P2 | README and some module documentation still describe legacy Edge/automatic publishing behavior inconsistent with the current manual draft-only Ryan route. | OPEN |
+| AUD-P2-001 | P2 | README and module documentation previously described legacy Edge/automatic publishing. | CLOSED — README and voice/captions module headers corrected at qualified HEAD `a5c57ca8f571980ca064c18e3c9672617c4a67ba`; manual draft-only Ryan route and explicit Edge rollback now documented. |
 | AUD-P2-002 | P2 | M5 storyboard/retrieval/ranking guarantees rely heavily on workflow inline assertions rather than a dedicated regression test layer. | OPEN |
 | AUD-P3-001 | P3 | Temporary M6.9 canary workflow remains after M6.9 closure. | REVIEW after audit evidence no longer depends on it |
 
@@ -44,11 +44,11 @@ Status: IN_PROGRESS
 - Frozen Ryan/Qwen identity/quality parameters have not been modified.
 
 ## Current checkpoint
-- Latest independently verified exact-SHA-qualified executable/config/test revision: `747adc016cab245959d4e3e45d427d1ea67e09a2`.
+- Latest independently verified exact-SHA-qualified executable/config/test revision: `a5c57ca8f571980ca064c18e3c9672617c4a67ba`.
 - M6 Qualification run `39961880015`, job `120441632589`: SUCCESS, 221 passed / 1 skipped; canonical locked production installation and `pip check` PASS. Focused run-provenance and adversarial tests executed on exact SHA.
-- Formal Gates PASS: 1, 2, 3, 4, 5, 6, 7, 8 = 8/10. Gate 9 READY_TO_FIX; Gate 10 NOT_STARTED pending controlled cleanup and clean-room nonpublishing E2E.
+- Formal Gates PASS: 1, 2, 3, 4, 5, 6, 7, 8, 9 = 9/10. Gate 10 NOT_STARTED pending real clean-room nonpublishing E2E.
 - P0 open: 0. P1 open: 0; all eight AUD-P1-001..008 CLOSED. AUD-P1-006 is CLOSED with exact-SHA qualification.
-- Tracked inventory: 116/116 classified, UNKNOWN=0. First-party executable/config/test/workflow: 74/74 differentially audited, including changed blobs qualified above. No tracked additions/deletions in this remediation.
+- Tracked inventory at current HEAD: 115/115 classified, UNKNOWN=0 (one obsolete closure accumulator deleted). First-party executable/config/test/workflow: 74/74 differentially audited, including changed blobs qualified at current SHA.
 - Frozen storyboard SHA: `ddd55af7ed3f7bd418b078140909750d758519bb` unchanged. No publishing/upload, paid service, new secret, or Ryan/Qwen identity/quality change.
 
 ## Closure checkpoint — 2026-10-03
@@ -243,3 +243,13 @@ Safety invariants unchanged: frozen storyboard `ddd55af7ed3f7bd418b078140909750d
 - `agents/qc_agent.py|cb3e9aa43c6e515873cb542f80bd3d37fa73dcc9|ACTIVE_RUNTIME|verify renderer/media; stamp QC report with final media and visual QC evidence|renderer+final+visual QC|package gate|runtime=yes|QUALIFIED|AUD-P1-006`
 - `scripts/m6_production_package_gate.py|d65191b5d604311ee117fc7cc104db609c4b46af|REQUIRED_RUNTIME|verify bound QC/package when active-run timestamp exported|QC+renderer+media|production package|runtime=yes|QUALIFIED|AUD-P1-006`
 - `tests/test_pre_m7_run_provenance.py|8765db131542599361cc3aefe7fc3f1d7740b9ec|REQUIRED_TEST|positive+adversarial visual/render/QC provenance and package regressions|synthetic fixture contracts|M6 Qualification|test=yes|QUALIFIED|AUD-P1-006`
+
+
+## Gate 9 controlled-cleanup closure — 2026-10-23
+- Gate 9 formally PASS after Gates 1–8 PASS. Live HEAD before ledger-only closure: `a5c57ca8f571980ca064c18e3c9672617c4a67ba`. Frozen storyboard SHA `ddd55af7ed3f7bd418b078140909750d758519bb` unchanged.
+- Cleanup commits: `5d31ed4c`, `eb835b1c`, `39e05b77` corrected README and voice/captions documentation that incorrectly described automatic publication or Edge as the default; `188f69d6` removed only obsolete `docs/audit/PRE_M7_CLOSURE_ACCUMULATOR_2026-10-06.md` after synchronization of its Gate 2/3/8 and AUD-P1-004 closure evidence into this primary ledger. Existing Gate 2/3 evidence documents and Gate 4 reproducibility evidence remain retained; no still-referenced evidence was deleted.
+- Reference/consumer proof: complete GitHub tracked tree at `a5c57ca8` is nontruncated, 115 blobs; the deleted accumulator is absent. All three workflow files were read at their current blobs: none references the deleted accumulator. The Ryan fixture canary is intentionally retained because `.github/workflows/m6-qualification.yml` watches it and the README identifies it as temporary/fixture-only. No removal of this active workflow is needed for Gate 9, and it must never be treated as real E2E evidence.
+- Additional safety cleanup: `.github/workflows/publish.yml@45853b62c28bb1362cdb0cbf1242d2981d06a07b` exports JSON/Markdown QC metadata only (not MP4/WAV/MP3); `.github/workflows/m6-9-production-canary.yml@050b4958e4460853c3a0ca4e693a80211b1bd676` likewise exports JSON/Markdown only. Canary uses exact-SHA checkout, locked production dependencies, fixed Python/runner identity and regression checks; synthetic visual fixtures remain explicitly marked as fixtures.
+- Exact-SHA M6 Qualification run `39963686148`, job `120447883488`: SUCCESS on `a5c57ca8f571980ca064c18e3c9672617c4a67ba`, 222 passed / 1 skipped, locked production dependency install and `pip check` PASS. M6.9 fixture canary run `39963686087`, job `120447883505`: SUCCESS on the same SHA. Neither is accepted as Gate 10 real clean-room E2E.
+- Dynamic Gate 1 denominator: 115/115 tracked blobs classified, UNKNOWN=0 (116 minus one deleted accumulator). Gate 3 denominator: 74/74 executable/config/test/workflow paths audited; changed existing workflow and regression blobs were differentially reviewed and exact-SHA qualified, with no new runtime-significant path. Gates 1 and 3 retain PASS. P0 open=0; P1 open=0, all eight CLOSED; AUD-P2-001 CLOSED, AUD-P2-002 remains OPEN, AUD-P3-001 remains retained-for-reference.
+- GLOBAL_MUTATION_CAPABILITY=AVAILABLE on successful supported Contents write and read-back. Gate 10 remains NOT_STARTED: it requires a genuinely fresh clean checkout and real Topic→Research→Script→Ryan TTS→WhisperX alignment→canonical timeline→storyboard→real visual retrieval/ranking→captions→1080x1920 30fps render→QC→package, without publishing, media upload, paid services, new secrets, or stale-state fixtures. A green fixture canary does not satisfy this criterion.
