@@ -44,8 +44,8 @@ Status: IN_PROGRESS
 - Frozen Ryan/Qwen identity/quality parameters have not been modified.
 
 ## Current checkpoint
-- Latest independently verified exact-SHA-qualified executable/config revision: `058d13067fab1a4792de1336aa2becc7a8f40d2a`.
-- M6 Qualification run `39939650583`, job `120367642155`: SUCCESS; `176 passed, 1 skipped`; locked production install and `pip check` PASS. Subsequent provenance hardening is EXACT_SHA_PENDING.
+- Latest independently verified exact-SHA-qualified executable/config revision: `6bc586cde6ba197b3ddefbf76df5980674e1edf4`.
+- M6 Qualification run `39954158582`, job `120415699911`: SUCCESS; `196 passed, 1 skipped`; locked production install and `pip check` PASS. Script, narration timeline, and storyboard source-integrity provenance are qualified; downstream candidate/assets/renderer/QC provenance remains open.
 - Formal Gates PASS: 1, 2, 3, 4, 6, 8 = 6/10.
 - P0 open: 0.
 - AUD-P1-001, AUD-P1-002, AUD-P1-003, AUD-P1-004, AUD-P1-005, AUD-P1-007 and AUD-P1-008 are CLOSED.
@@ -212,3 +212,18 @@ Safety invariants unchanged: frozen storyboard `ddd55af7ed3f7bd418b078140909750d
 - `agents/script_agent.py|e314155be10ca2bd42d14cd5e28bed9df7bd9f74|ACTIVE_RUNTIME|stamp script producer/schema/run and canonical payload digest|RSS/Gemini script generation|voice_agent|runtime=yes|EXACT_SHA_PENDING|AUD-P1-006`
 - `scripts/m6_run_provenance.py|96ace277b7cb7375d3672f5862d605e8af7d746d|REQUIRED_RUNTIME|reject mismatched script producer/schema/run/content before TTS|script JSON|all select_run_artifact consumers|runtime=yes|EXACT_SHA_PENDING|AUD-P1-006`
 - `tests/test_pre_m7_run_provenance.py|592f40fdb91bfe8c5fafdb8e880619f94c2a4e01|REQUIRED_TEST|adversarial producer/schema/run/restored-cache corruption tests|pytest|M6 Qualification|test=yes|EXACT_SHA_PENDING|AUD-P1-006`
+
+
+## Exact-SHA provenance qualification — 2026-10-23
+- Current qualifying executable/config/test SHA: `6bc586cde6ba197b3ddefbf76df5980674e1edf4`; M6 Qualification run `39954158582`, job `120415699911` SUCCESS, `196 passed, 1 skipped`, locked production install and `pip check` PASS. The full `tests/` directory, including new source-integrity adversarial tests, ran on this exact SHA. Previous script-only SHA `bc1d19f5fbf82da05433a87603a21955b76e993f` independently qualified via run `39946336936`, job `120389811312` SUCCESS, `182 passed, 1 skipped`.
+- AUD-P1-006 remains READY_TO_FIX and DIRECT_BLOCKS=[5,7,10]. Qualified subfixes now enforce producer/schema/run/payload SHA-256 for script and exact upstream byte SHA-256 for narration timeline and storyboard. Wrong producer, wrong schema, wrong run, tampered content, changed upstream source, missing upstream, and restored-cache substitution fail closed in bound Actions selection. Remaining direct blocker: extend equivalent run-bound producer/schema/source-hash validation across ranked candidate/asset manifests, renderer and final QC/package consumers; current subfix is NOT full finding closure.
+- Coherent Contents writes, all verified by read-back: `scripts/m6_run_provenance.py@477100a93ce13b362579d01e23bd232f5c8f6b20` (`d2ad7dec`); `agents/voice_agent.py@83f5ccc28d6fb68793ae9f2c28ed6e188ff95714` (`09ee6bac`); `agents/storyboard_agent.py@fec1cfd2904f2f840ad0585ffb70c5a57e3976ed` (`55183a30`); `tests/test_pre_m7_run_provenance.py@e581ecdd04868406126adba2f95d84b8f32d090b` (`6bc586cd`). Earlier script-provenance blobs `agents/script_agent.py@e314155be10ca2bd42d14cd5e28bed9df7bd9f74` and `scripts/m6_run_provenance.py@96ace277b7cb7375d3672f5862d605e8af7d746d` were included in the successful qualification ancestry.
+- Dynamic tracked inventory unchanged: 116/116 classified, UNKNOWN=0. Executable/config/test/workflow audited 74/74; four changed existing runtime/test blobs differentially inspected and exact-SHA qualified. Gates PASS remain 1,2,3,4,6,8 = 6/10; delta PASS=0. P0 open=0; P1 CLOSED=7, READY_TO_FIX=1; delta CLOSED=0. GLOBAL_MUTATION_CAPABILITY=AVAILABLE, no global safety/tool-layer write refusal. No canary fixture is treated as production E2E.
+- Frozen `factory-v1-storyboard` remains `ddd55af7ed3f7bd418b078140909750d758519bb`; Ryan/Qwen frozen identity and quality parameters unchanged. No publishing/upload, paid services, billing or new secrets.
+
+### AUDIT_CURSOR differential — source-bound narration/storyboard
+- `agents/script_agent.py|e314155be10ca2bd42d14cd5e28bed9df7bd9f74|ACTIVE_RUNTIME|stamp script producer/schema/run/content digest|script generation|voice agent|runtime=yes|QUALIFIED|AUD-P1-006`
+- `scripts/m6_run_provenance.py|477100a93ce13b362579d01e23bd232f5c8f6b20|REQUIRED_RUNTIME|verify script/timeline/storyboard provenance and upstream SHA-256|bound artifacts|voice/storyboard/visuals|runtime=yes|QUALIFIED|AUD-P1-006`
+- `agents/voice_agent.py|83f5ccc28d6fb68793ae9f2c28ed6e188ff95714|ACTIVE_RUNTIME|stamp timeline exact source-script SHA-256|script artifact|storyboard/captions|runtime=yes|QUALIFIED|AUD-P1-006`
+- `agents/storyboard_agent.py|fec1cfd2904f2f840ad0585ffb70c5a57e3976ed|ACTIVE_RUNTIME|stamp storyboard exact timeline SHA-256|narration timeline|ranked visual retrieval|runtime=yes|QUALIFIED|AUD-P1-006`
+- `tests/test_pre_m7_run_provenance.py|e581ecdd04868406126adba2f95d84b8f32d090b|REQUIRED_TEST|wrong producer/schema/run/payload/upstream/restored-cache adversarial tests|pytest|M6 Qualification|test=yes|QUALIFIED|AUD-P1-006`
