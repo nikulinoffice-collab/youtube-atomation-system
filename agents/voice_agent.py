@@ -23,6 +23,7 @@ import subprocess
 import sys
 import unicodedata
 from pathlib import Path
+from scripts.m6_run_provenance import select_run_artifact
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -39,12 +40,7 @@ LEXICAL_RE = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
 
 
 def find_latest_script() -> Path:
-    scripts = sorted(OUTPUT_DIR.glob("script_*.json"))
-    if not scripts:
-        raise SystemExit(
-            "No script_*.json files found in agents/output/. Run script_agent.py first."
-        )
-    return scripts[-1]
+    return select_run_artifact(OUTPUT_DIR, "script_", "script_*.json")
 
 
 def lexical_form(token: str) -> str:
