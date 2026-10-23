@@ -23,7 +23,7 @@ import subprocess
 import sys
 import unicodedata
 from pathlib import Path
-from scripts.m6_run_provenance import select_run_artifact
+from scripts.m6_run_provenance import select_run_artifact, stamp_json_artifact
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -300,6 +300,9 @@ def main():
         timeline = build_production_timeline(
             script_text, aligned["word_timings"], result["duration_s"], voice="Ryan"
         )
+        timeline = stamp_json_artifact(
+            timeline, "pre-m7.timeline.v1", "agents.voice_agent", timestamp, (script_path,)
+        )
         timeline_path.write_text(json.dumps(timeline, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"✅ Ryan WAV saved: {voice_path.with_suffix('.wav')}")
         print(f"✅ Narration timeline saved: {timeline_path}")
@@ -323,6 +326,9 @@ def main():
         "words": words,
     }
     validate_timeline(timeline)
+    timeline = stamp_json_artifact(
+        timeline, "pre-m7.timeline.v1", "agents.voice_agent", timestamp, (script_path,)
+    )
     timeline_path.write_text(json.dumps(timeline, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print(f"✅ Voice saved: {voice_path}")
