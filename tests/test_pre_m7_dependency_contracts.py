@@ -126,3 +126,25 @@ def test_qualification_workflow_yaml_parses_and_one_shot_e2e_is_nonpublishing():
     assert "actions/upload-artifact" not in text
     assert "secrets.GEMINI_API_KEY" in text and "secrets.PEXELS_API_KEY" in text
     assert "m6_production_package_gate.py" in text
+
+
+def test_gate10_cleanroom_exports_validated_ryan_backend_before_real_voice():
+    """The clean-room runner must not silently fall back to the Edge rollback."""
+    import yaml
+
+    workflow = yaml.safe_load(QUALIFICATION.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["pre_m7_cleanroom_e2e"]["steps"]
+    preflight_index = next(
+        i for i, step in enumerate(steps)
+        if step["name"] == "Preflight existing free-tier credentials and nonpublishing Ryan route"
+    )
+    voice_index = next(
+        i for i, step in enumerate(steps)
+        if step["name"] == "Real Ryan TTS alignment timeline storyboard visual retrieval ranking captions render QC"
+    )
+    assert preflight_index < voice_index
+    preflight = steps[preflight_index]["run"]
+    assert 'python - <<\'PY\' >> "$GITHUB_ENV"' in preflight
+    assert 'assert active_backend(route)=="m6-ryan"' in preflight
+    assert 'print(f"FACTORY_VOICE_BACKEND={active_backend(route)}")' in preflight
+    assert "python voice_agent.py" in steps[voice_index]["run"]
