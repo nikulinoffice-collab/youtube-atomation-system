@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from scripts.m6_run_provenance import select_run_artifact
+from scripts.m6_run_provenance import select_run_artifact, stamp_json_artifact
 
 
 def valid_script(stamp):
@@ -130,3 +130,101 @@ def test_draft_workflow_exports_run_identity_before_downstream_processing():
     assert export < voice
     assert 'if len(scripts) != 1:' in source
     assert 'python - <<\'PY\' >> "$GITHUB_ENV"' in source
+
+
+@pytest.fixture
+def bound_chain(artifacts, monkeypatch):
+    folder, script_path = artifacts
+    stamp = "20261023T120000Z"
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("FACTORY_RUN_TIMESTAMP", stamp)
+    timeline_path = folder / f"narration_timeline_{stamp}.json"
+    timeline = stamp_json_artifact(
+        {"schema_version": 3, "text": "Verified narration", "words": []},
+        "pre-m7.timeline.v1", "agents.voice_agent", stamp, (script_path,),
+    )
+    timeline_path.write_text(json.dumps(timeline), encoding="utf-8")
+    storyboard_path = folder / f"storyboard_{stamp}.json"
+    storyboard = stamp_json_artifact(
+        {"schema_version": 3, "scene_count": 1, "scenes": [{"scene_id": 1}]},
+        "pre-m7.storyboard.v1", "agents.storyboard_agent", stamp, (timeline_path,),
+    )
+    storyboard_path.write_text(json.dumps(storyboard), encoding="utf-8")
+    return folder, script_path, timeline_path, storyboard_path
+
+
+def test_bound_chain_accepts_only_exact_upstream_content(bound_chain):
+    folder, _, timeline, storyboard = bound_chain
+    assert select_run_artifact(folder, "narration_timeline_", "narration_timeline_*.json") == timeline
+    assert select_run_artifact(folder, "storyboard_", "storyboard_*.json") == storyboard
+
+
+@pytest.mark.parametrize("artifact_index,prefix,field,value", [
+    (2, "narration_timeline_", "producer", "agents.fake_voice"),
+    (2, "narration_timeline_", "contract", "pre-m7.script.v1"),
+    (2, "narration_timeline_", "run_timestamp", "20261024T120000Z"),
+    (3, "storyboard_", "producer", "agents.fake_storyboard"),
+    (3, "storyboard_", "contract", "pre-m7.timeline.v1"),
+    (3, "storyboard_", "run_timestamp", "20261024T120000Z"),
+])
+def test_bound_chain_rejects_wrong_producer_schema_run(
+    bound_chain, artifact_index, prefix, field, value
+):
+    folder = bound_chain[0]
+    path = bound_chain[artifact_index]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["artifact_provenance"][field] = value
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="producer/schema/run provenance mismatch"):
+        select_run_artifact(folder, prefix, prefix + "*.json")
+
+
+@pytest.mark.parametrize("artifact_index,prefix", [
+    (2, "narration_timeline_"), (3, "storyboard_"),
+])
+def test_bound_chain_rejects_payload_tampering(bound_chain, artifact_index, prefix):
+    folder = bound_chain[0]
+    path = bound_chain[artifact_index]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["restored_wrong_run_payload"] = True
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="content digest mismatch"):
+        select_run_artifact(folder, prefix, prefix + "*.json")
+
+
+@pytest.mark.parametrize("source_index,prefix", [
+    (1, "narration_timeline_"), (2, "storyboard_"),
+])
+def test_bound_chain_rejects_stale_upstream_bytes(bound_chain, source_index, prefix):
+    folder = bound_chain[0]
+    source = bound_chain[source_index]
+    source.write_bytes(source.read_bytes() + b"\\n")
+    with pytest.raises(SystemExit, match="upstream source digest mismatch"):
+        select_run_artifact(folder, prefix, prefix + "*.json")
+
+
+def test_bound_chain_rejects_missing_upstream_source(bound_chain):
+    folder, _, timeline, _ = bound_chain
+    timeline.unlink()
+    with pytest.raises(SystemExit, match="Missing or duplicate upstream provenance source"):
+        select_run_artifact(folder, "storyboard_", "storyboard_*.json")
+
+
+def test_bound_chain_rejects_restored_cache_provenance_swap(bound_chain):
+    folder, _, _, storyboard = bound_chain
+    data = json.loads(storyboard.read_text(encoding="utf-8"))
+    data["artifact_provenance"]["sources"] = {"narration_timeline_20261024T120000Z.json": "0" * 64}
+    storyboard.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="upstream source digest mismatch"):
+        select_run_artifact(folder, "storyboard_", "storyboard_*.json")
+
+
+def test_producers_stamp_timeline_and_storyboard_contracts():
+    root = Path(__file__).resolve().parents[1] / "agents"
+    for name, contract in (
+        ("voice_agent.py", "pre-m7.timeline.v1"),
+        ("storyboard_agent.py", "pre-m7.storyboard.v1"),
+    ):
+        source = (root / name).read_text(encoding="utf-8")
+        assert "stamp_json_artifact(" in source
+        assert contract in source
