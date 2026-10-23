@@ -1,9 +1,10 @@
 """
 Step 2: Voice + Narration Timeline Agent
 -----------------------------------------
-Takes the most recent script JSON and synthesizes narration with Edge-TTS.
-The same synthesis pass writes both the MP3 audio and the authoritative
-word-boundary timeline used by captions and storyboard.
+Consumes the exact active-run script JSON and follows the committed M6.9
+Ryan/Qwen3 production route, with Edge-TTS available only as explicit rollback.
+Writes a WAV or MP3 and a provenance-bound authoritative narration timeline
+used by captions and storyboard.
 
 Canonical text remains the source of truth. Edge-TTS may split punctuation-
 joined text (for example ``think—should``) or keep compounds such as
