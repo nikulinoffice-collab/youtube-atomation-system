@@ -48,9 +48,14 @@ def load_recent_topics(limit: int = 100) -> list[str]:
     if not HISTORY_FILE.exists():
         return []
     try:
-        return json.loads(HISTORY_FILE.read_text())[-limit:]
-    except (json.JSONDecodeError, OSError) as exc:
+        history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeError) as exc:
         raise SystemExit(f"Recent-topic state is unreadable: {HISTORY_FILE}: {exc}") from exc
+    if not isinstance(history, list) or any(
+        not isinstance(link, str) or not link.strip() for link in history
+    ):
+        raise SystemExit(f"Recent-topic state has invalid schema: {HISTORY_FILE}")
+    return history[-limit:]
 
 
 def save_recent_topic(identifier: str) -> None:
