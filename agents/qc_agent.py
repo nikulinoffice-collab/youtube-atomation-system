@@ -10,6 +10,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from scripts.m6_run_provenance import select_run_artifact
 
 from visual_qc_agent import VisualQCError, run_visual_qc
 from scripts.m6_production_media import ProductionMediaError, resolve_voice_artifact
@@ -23,10 +24,7 @@ BOUNDARY_TOLERANCE = 0.06
 
 
 def latest_script() -> Path:
-    matches = sorted(OUTPUT_DIR.glob("script_[0-9]*.json"))
-    if not matches:
-        raise SystemExit("No script artifact found for QC.")
-    return matches[-1]
+    return select_run_artifact(OUTPUT_DIR, "script_", "script_[0-9]*.json")
 
 
 def read_json(path: Path) -> dict:
