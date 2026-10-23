@@ -10,7 +10,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from scripts.m6_run_provenance import select_run_artifact
+from scripts.m6_run_provenance import select_run_artifact, verify_visual_chain
 
 from visual_qc_agent import VisualQCError, run_visual_qc
 from scripts.m6_production_media import ProductionMediaError, resolve_voice_artifact
@@ -84,6 +84,7 @@ def main() -> None:
         "final": OUTPUT_DIR / f"final_{timestamp}.mp4",
     }
     for path in paths.values(): require_file(path)
+    verify_visual_chain(OUTPUT_DIR, timestamp)
     timeline = read_json(paths["timeline"]); storyboard = read_json(paths["storyboard"]); asset_manifest = read_json(paths["assets"]); renderer = read_json(paths["renderer"])
     voice_probe = ffprobe(paths["voice"]); final_probe = ffprobe(paths["final"])
     audio_duration = float(voice_probe["format"]["duration"]); timeline_duration = float(timeline["duration"]); final_duration = float(final_probe["format"]["duration"]); caption_end = srt_last_end(paths["captions"])
