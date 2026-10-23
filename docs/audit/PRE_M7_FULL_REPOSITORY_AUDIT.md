@@ -14,11 +14,11 @@ Status: IN_PROGRESS
 2. Architecture — PASS
 3. Line-by-line static audit — PASS
 4. Dependencies/external interfaces — PASS
-5. Data flow/contracts — IN_PROGRESS
+5. Data flow/contracts — PASS
 6. GitHub Actions/automation — PASS
-7. Tests/QC/fail-closed — IN_PROGRESS
+7. Tests/QC/fail-closed — PASS
 8. Security/cost/publishing — PASS
-9. Controlled cleanup/refactor — NOT_STARTED
+9. Controlled cleanup/refactor — READY_TO_FIX
 10. Clean-room E2E qualification — NOT_STARTED
 
 ## Findings ledger
@@ -29,7 +29,7 @@ Status: IN_PROGRESS
 | AUD-P1-003 | P1 | Cross-run anti-repeat history was not persisted across read-only draft runs. DIRECT_BLOCKS=[5,6,7,10]. | CLOSED — cache restore/save and explicit fail-closed cache-miss bootstrap in `.github/workflows/publish.yml@09ee25fae9f895484d295abd084d4b6c0c29628d`; malformed restored-state rejection in `agents/script_agent.py@ff9bdaf2632776ac580fb1b7e04e06098bc778ee`; restored/empty/corrupt/continuity regressions in `tests/test_pre_m7_state_contracts.py@6e52e96b5e4a9375e5d57fc0339669256d5b4d33`. Exact executable SHA `7e898c57108966d0e4c81e07a218d1a681104a88`, M6 Qualification run `39925089835`, job `120319389641` SUCCESS (140 passed / 1 skipped); no contents:write or publishing. Cache eviction/miss fails closed unless explicitly bootstrapped. |
 | AUD-P1-004 | P1 | `upload_agent.py` independently executable publishing entry point remediated with default-private plus explicit `YOUTUBE_PUBLISH_AUTHORIZED=true` as the first `main()` operation before artifact discovery/OAuth/API/network. DIRECT_BLOCKS=[8,10]. | CLOSED — corrected implementation `94b0f477b54b9f0655c8b627f66335eb7fa9b6f4` contained in exact-SHA-qualified `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS. |
 | AUD-P1-005 | P1 | Validated M5.4 Source Card and controlled still-motion contract was absent from `agents/video_agent.py@01e6f697b3810bca8e3ce3541ca112243dc927d1` relative to frozen `agents/video_agent.py@6b9e20817e59240032c65aaadbb95bb00fe4ba8b`. DIRECT_BLOCKS=[5,7,10] — visual fidelity and rendering/QC, not workflow qualification. | CLOSED — M5.4 Source Card, caption-safe layout and five still-motion paths restored in `agents/video_agent.py@389e440c280984824956229cd2b62db6e5677fd2`, with explicit fail-closed source-URL validation and no stock downgrade; M6.9 `resolve_voice_artifact` preserved. Focused positive/negative/adversarial tests `tests/test_pre_m7_visual_contracts.py@41386c5b3c430cc99b1510b799ad9f89779958d8` executed in exact-SHA M6 Qualification `39932656805`, job `120344462909`, on `0ad2953c45e81ca31e08d86107804390d7400245`: SUCCESS, 160 passed / 1 skipped, locked install and pip check PASS. Synthetic fixture/contract tests do not constitute clean-room E2E. |
-| AUD-P1-006 | P1 | Critical artifact consumers lack explicit run-bound producer/schema/provenance identity; `agents/voice_agent.py@21a5454bfab5ba7795dd774080348d1fd28b8110`, `agents/storyboard_agent.py@e096f2aaa73c2bbc19469c702bd0cf4fb62bee6a`, `agents/visuals_m53_agent.py@70d3fd54b4ba0428c038bc383b56e59996236817`, `agents/video_agent.py@389e440c280984824956229cd2b62db6e5677fd2`. DIRECT_BLOCKS=[5,7,10] because stale/wrong-run data may cross producer-consumer boundaries. | READY_TO_FIX — active-run exact-artifact selection subfix is QUALIFIED at `058d13067fab1a4792de1336aa2becc7a8f40d2a` (run `39939650583`, job `120367642155`, SUCCESS); still requires producer/schema/run identity and source-hash validation across the artifact chain, with wrong-producer/schema/restored-cache adversarial tests. Finding NOT CLOSED. |
+| AUD-P1-006 | P1 | Run-bound producer/schema/payload/upstream SHA-256 integrity across script, narration timeline, storyboard, ranked candidate and asset manifests, selected media, renderer, final MP4 and QC/package. DIRECT_BLOCKS=[5,7,10]; Gate10 additionally requires clean-room E2E independent of this finding. | CLOSED — all producer/consumer integrity checks and adversarial regressions qualified at executable SHA `747adc016cab245959d4e3e45d427d1ea67e09a2`, M6 Qualification run `39961880015`, job `120441632589` SUCCESS (221 passed, 1 skipped; locked install, `pip check` PASS). Renderer/QC and package checks reject stale, wrong-producer/schema/run, tampered source/media, and restored-cache substitutions; final clean-room production E2E remains Gate10, not a P1 closure substitute. |
 | AUD-P1-007 | P1 | Qualification previously had watched-path and test-discovery blind spots. DIRECT_BLOCKS=[6,7,10] because changes could evade executable qualification and regression. | CLOSED — `.github/workflows/m6-qualification.yml@f6bc535beabd9718add211c705c02306dd3971f6` watches all three workflows, runtime directories, production lock and benchmark corpus; push/M6.9 runs all `tests/`. Focused regression `tests/test_pre_m7_dependency_contracts.py@b60b3e5852b59e4d524d28a96c3d47b67acdcf00` executed in exact-SHA M6 Qualification `39925566753`, job `120320966484`, SUCCESS (144 passed / 1 skipped). |
 | AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. DIRECT_BLOCKS=[6,7,10]. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913`; fix remains contained in latest qualified executable `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`. |
 | AUD-P2-001 | P2 | README and some module documentation still describe legacy Edge/automatic publishing behavior inconsistent with the current manual draft-only Ryan route. | OPEN |
@@ -44,13 +44,12 @@ Status: IN_PROGRESS
 - Frozen Ryan/Qwen identity/quality parameters have not been modified.
 
 ## Current checkpoint
-- Latest independently verified exact-SHA-qualified executable/config revision: `6bc586cde6ba197b3ddefbf76df5980674e1edf4`.
-- M6 Qualification run `39954158582`, job `120415699911`: SUCCESS; `196 passed, 1 skipped`; locked production install and `pip check` PASS. Script, narration timeline, and storyboard source-integrity provenance are qualified; downstream candidate/assets/renderer/QC provenance remains open.
-- Formal Gates PASS: 1, 2, 3, 4, 6, 8 = 6/10.
-- P0 open: 0.
-- AUD-P1-001, AUD-P1-002, AUD-P1-003, AUD-P1-004, AUD-P1-005, AUD-P1-007 and AUD-P1-008 are CLOSED.
-- Remaining P1 direct blocker: AUD-P1-006 (run-bound producer/schema/provenance), Gates 5/7/10.
-- Gate 9 remains blocked until Gates 1–8 PASS; Gate 10 remains blocked until its direct prerequisites are closed.
+- Latest independently verified exact-SHA-qualified executable/config/test revision: `747adc016cab245959d4e3e45d427d1ea67e09a2`.
+- M6 Qualification run `39961880015`, job `120441632589`: SUCCESS, 221 passed / 1 skipped; canonical locked production installation and `pip check` PASS. Focused run-provenance and adversarial tests executed on exact SHA.
+- Formal Gates PASS: 1, 2, 3, 4, 5, 6, 7, 8 = 8/10. Gate 9 READY_TO_FIX; Gate 10 NOT_STARTED pending controlled cleanup and clean-room nonpublishing E2E.
+- P0 open: 0. P1 open: 0; all eight AUD-P1-001..008 CLOSED. AUD-P1-006 is CLOSED with exact-SHA qualification.
+- Tracked inventory: 116/116 classified, UNKNOWN=0. First-party executable/config/test/workflow: 74/74 differentially audited, including changed blobs qualified above. No tracked additions/deletions in this remediation.
+- Frozen storyboard SHA: `ddd55af7ed3f7bd418b078140909750d758519bb` unchanged. No publishing/upload, paid service, new secret, or Ryan/Qwen identity/quality change.
 
 ## Closure checkpoint — 2026-10-03
 - Live active HEAD: `36357bd5c9e6f378d7fd167977f3dea86a4f58da`.
@@ -227,3 +226,20 @@ Safety invariants unchanged: frozen storyboard `ddd55af7ed3f7bd418b078140909750d
 - `agents/voice_agent.py|83f5ccc28d6fb68793ae9f2c28ed6e188ff95714|ACTIVE_RUNTIME|stamp timeline exact source-script SHA-256|script artifact|storyboard/captions|runtime=yes|QUALIFIED|AUD-P1-006`
 - `agents/storyboard_agent.py|fec1cfd2904f2f840ad0585ffb70c5a57e3976ed|ACTIVE_RUNTIME|stamp storyboard exact timeline SHA-256|narration timeline|ranked visual retrieval|runtime=yes|QUALIFIED|AUD-P1-006`
 - `tests/test_pre_m7_run_provenance.py|e581ecdd04868406126adba2f95d84b8f32d090b|REQUIRED_TEST|wrong producer/schema/run/payload/upstream/restored-cache adversarial tests|pytest|M6 Qualification|test=yes|QUALIFIED|AUD-P1-006`
+
+## AUD-P1-006 closure and Gate5/Gate7 synchronization — 2026-10-23
+- Qualified executable/config/test SHA: `747adc016cab245959d4e3e45d427d1ea67e09a2`. Exact-SHA M6 Qualification run `39961880015`, job `120441632589`: SUCCESS, 221 passed / 1 skipped, locked full production dependency install, `pip check` PASS. The full `tests/` suite including `tests/test_pre_m7_run_provenance.py` ran on this SHA.
+- AUD-P1-006 CLOSED: existing qualified script/timeline/storyboard provenance now extends through M5.3 ranked candidates, selected media bytes, M5.4 renderer/final MP4, M5.5 QC and production package. Every critical JSON artifact has producer, schema, exact run timestamp, canonical payload digest and expected upstream source-byte hashes. Asset paths are constrained to the active-run output directory; voice WAV/MP3 remains exclusively resolved by the frozen M6.9 media resolver. No publishing/OAuth action was invoked.
+- Positive/negative/adversarial regression proves wrong producer/schema/run, corrupt or tampered manifests, stale upstream storyboard, modified downloaded media, modified voice/captions/final MP4, altered renderer/QC/visual-selection reports, path traversal and restored-cache contamination fail closed. Earlier intermediate qualification `39961843368` failed a test-assertion defect (invalid JSON fixture when testing a digest mismatch); corrected test retained the stronger digest assertion and final exact SHA passed. No valid QC/safety assertion was weakened.
+- Gate 5 PASS: direct blocker AUD-P1-006 closed; actual producer/consumer source integrity is enforced in draft rendering, QC and package verification. Gate 7 PASS: focused positive/negative/adversarial coverage and full exact-SHA regression passed, with previously validated M6.9 media/QC route retained. Fixture tests do NOT prove the full real Topic-to-Package chain; this remains explicitly Gate 10.
+- Gate 9 is now actionable only after Gates 1–8 PASS: cleanup must preserve every still-referenced evidence file and frozen production route. Gate 10 requires clean checkout, no stale state, no publishing/paid services, actual end-to-end source and media chain, and exact final executable SHA.
+- Dynamic Gate 1: 116/116 tracked classified, UNKNOWN=0. Dynamic Gate 3: 74/74 first-party executable/config/test/workflow blobs audited. Changed existing blobs only; no denominator change. Formal PASS=8/10; P0 open=0; P1 open=0.
+- GLOBAL_MUTATION_CAPABILITY=AVAILABLE: supported GitHub Contents writes and exact blob/commit read-back succeeded; no safety/tool-layer refusal. Frozen `factory-v1-storyboard` remains `ddd55af7ed3f7bd418b078140909750d758519bb`. Ryan/Qwen identity/quality parameters untouched. No video publishing/upload, new secrets, billing or paid services.
+
+### AUDIT_CURSOR differential — visual/render/QC provenance
+- `scripts/m6_run_provenance.py|f6ae43a31f5c5bfdc2c0a44e08ba56cc0e07eaab|REQUIRED_RUNTIME|exact-run script/storyboard/candidates/media/renderer/QC source-hash verification|producer artifacts|renderer+QC+package|runtime=yes|QUALIFIED|AUD-P1-006`
+- `agents/visuals_m53_agent.py|10c00c84025a3a74c1f8ad24376341e92f75e755|ACTIVE_RUNTIME|stamp M5.3 candidate and asset manifests with exact upstream media|storyboard+ranked retrieval|renderer+QC|runtime=yes|QUALIFIED|AUD-P1-006`
+- `agents/video_agent.py|b99c1736545488b1b2548da97461d9e568b0c196|ACTIVE_RUNTIME|verify visual provenance before rendering; stamp renderer after final MP4|visuals+voice+captions|QC+package|runtime=yes|QUALIFIED|AUD-P1-006`
+- `agents/qc_agent.py|cb3e9aa43c6e515873cb542f80bd3d37fa73dcc9|ACTIVE_RUNTIME|verify renderer/media; stamp QC report with final media and visual QC evidence|renderer+final+visual QC|package gate|runtime=yes|QUALIFIED|AUD-P1-006`
+- `scripts/m6_production_package_gate.py|d65191b5d604311ee117fc7cc104db609c4b46af|REQUIRED_RUNTIME|verify bound QC/package when active-run timestamp exported|QC+renderer+media|production package|runtime=yes|QUALIFIED|AUD-P1-006`
+- `tests/test_pre_m7_run_provenance.py|8765db131542599361cc3aefe7fc3f1d7740b9ec|REQUIRED_TEST|positive+adversarial visual/render/QC provenance and package regressions|synthetic fixture contracts|M6 Qualification|test=yes|QUALIFIED|AUD-P1-006`
