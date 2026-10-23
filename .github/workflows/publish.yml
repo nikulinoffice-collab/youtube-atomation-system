@@ -385,11 +385,19 @@ jobs:
           test ${#videos[@]} -gt 0
           ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 "${videos[-1]}"
 
-      - name: Upload draft artifacts
+      - name: Preserve draft QC metadata (no media upload)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: factory-v1-run-${{ github.run_number }}
-          path: agents/output/
+          name: factory-v1-qc-${{ github.run_number }}
+          path: |
+            agents/output/narration_timeline_*.json
+            agents/output/storyboard_*.json
+            agents/output/candidate_manifest_*.json
+            agents/output/asset_manifest_*.json
+            agents/output/renderer_manifest_*.json
+            agents/output/qc_report_*.json
+            agents/output/visual_qc_report_*.json
+            agents/output/visual_selection_report_*.md
           if-no-files-found: warn
           retention-days: 7
