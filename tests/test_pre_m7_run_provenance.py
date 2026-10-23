@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from scripts.m6_run_provenance import select_run_artifact, stamp_json_artifact
+from scripts.m6_run_provenance import select_run_artifact, stamp_json_artifact, verify_visual_chain
 
 
 def valid_script(stamp):
@@ -228,3 +228,91 @@ def test_producers_stamp_timeline_and_storyboard_contracts():
         source = (root / name).read_text(encoding="utf-8")
         assert "stamp_json_artifact(" in source
         assert contract in source
+
+@pytest.fixture
+def bound_visual_chain(bound_chain):
+    folder, _, _, storyboard = bound_chain
+    stamp = "20261023T120000Z"
+    media = folder / f"visual_{stamp}_scene_01.jpg"
+    media.write_bytes(b"verified-test-image-bytes")
+    candidates = folder / f"candidate_manifest_{stamp}.json"
+    candidate_data = stamp_json_artifact(
+        {"schema_version": 2, "milestone": "M5.3",
+         "source_storyboard": storyboard.name, "scenes": [{"scene_id": 1}]},
+        "pre-m7.candidates.v1", "agents.visuals_m53_agent", stamp, (storyboard,),
+    )
+    candidates.write_text(json.dumps(candidate_data), encoding="utf-8")
+    assets = folder / f"asset_manifest_{stamp}.json"
+    asset_data = stamp_json_artifact(
+        {"schema_version": 4, "source_storyboard": storyboard.name,
+         "source_candidate_manifest": candidates.name,
+         "assets": [{"scene_id": 1, "path": str(media)}]},
+        "pre-m7.assets.v1", "agents.visuals_m53_agent",
+        stamp, (candidates, media),
+    )
+    assets.write_text(json.dumps(asset_data), encoding="utf-8")
+    return folder, candidates, assets, media
+
+
+def test_bound_visual_chain_accepts_exact_candidate_and_media_bytes(bound_visual_chain):
+    verify_visual_chain(bound_visual_chain[0], "20261023T120000Z")
+
+
+@pytest.mark.parametrize("index,field,bad", [
+    (1, "producer", "agents.other_visuals"),
+    (1, "contract", "pre-m7.assets.v1"),
+    (1, "run_timestamp", "20261024T120000Z"),
+    (2, "producer", "agents.other_visuals"),
+    (2, "contract", "pre-m7.candidates.v1"),
+    (2, "run_timestamp", "20261024T120000Z"),
+])
+def test_bound_visual_chain_rejects_wrong_producer_schema_run(bound_visual_chain, index, field, bad):
+    path = bound_visual_chain[index]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["artifact_provenance"][field] = bad
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="provenance mismatch"):
+        verify_visual_chain(bound_visual_chain[0], "20261023T120000Z")
+
+
+@pytest.mark.parametrize("index", [1, 2])
+def test_bound_visual_chain_rejects_manifest_payload_tampering(bound_visual_chain, index):
+    path = bound_visual_chain[index]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["restored_wrong_run"] = True
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="content digest mismatch"):
+        verify_visual_chain(bound_visual_chain[0], "20261023T120000Z")
+
+
+def test_bound_visual_chain_rejects_modified_media_bytes(bound_visual_chain):
+    media = bound_visual_chain[3]
+    media.write_bytes(b"restored-cache-contamination")
+    with pytest.raises(SystemExit, match="upstream source digest mismatch"):
+        verify_visual_chain(bound_visual_chain[0], "20261023T120000Z")
+
+
+def test_bound_visual_chain_rejects_stale_storyboard_bytes(bound_visual_chain):
+    storyboard = bound_visual_chain[0] / "storyboard_20261023T120000Z.json"
+    storyboard.write_bytes(storyboard.read_bytes() + b"\n")
+    with pytest.raises(SystemExit, match="upstream source digest mismatch"):
+        verify_visual_chain(bound_visual_chain[0], "20261023T120000Z")
+
+
+def test_bound_visual_chain_rejects_media_path_traversal(bound_visual_chain):
+    path = bound_visual_chain[2]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["assets"][0]["path"] = "../wrong-run/visual.jpg"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit, match="path escapes active-run"):
+        verify_visual_chain(bound_visual_chain[0], "20261023T120000Z")
+
+
+def test_visual_provenance_is_produced_and_enforced_before_render_qc():
+    root = Path(__file__).resolve().parents[1] / "agents"
+    producer = (root / "visuals_m53_agent.py").read_text(encoding="utf-8")
+    assert "pre-m7.candidates.v1" in producer and "pre-m7.assets.v1" in producer
+    assert producer.count("stamp_json_artifact(") == 2
+    for name in ("video_agent.py", "qc_agent.py"):
+        source = (root / name).read_text(encoding="utf-8")
+        assert "verify_visual_chain(OUTPUT_DIR, timestamp)" in source
