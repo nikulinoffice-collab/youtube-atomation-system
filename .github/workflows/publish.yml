@@ -2,6 +2,12 @@ name: Factory V1 - Generate Draft Short
 
 on:
   workflow_dispatch:
+    inputs:
+      bootstrap_topic_history:
+        description: 'Explicitly bootstrap history from the committed seed after a cache miss'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: factory-v1-${{ github.repository }}
@@ -77,13 +83,48 @@ jobs:
           print(f"FACTORY_VOICE_BACKEND={active_backend(route)}")
           PY
 
+      - name: Restore cross-run anti-repeat topic history
+        id: topic-history-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: agents/state/recent_topics.json
+          key: pre-m7-topic-history-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            pre-m7-topic-history-${{ github.ref_name }}-
+
+      - name: Require restored history or explicit bootstrap
+        env:
+          RESTORED_CACHE_KEY: ${{ steps.topic-history-cache.outputs.cache-matched-key }}
+          BOOTSTRAP_ALLOWED: ${{ inputs.bootstrap_topic_history }}
+        run: |
+          if [ -z "$RESTORED_CACHE_KEY" ] && [ "$BOOTSTRAP_ALLOWED" != "true" ]; then
+            echo "TOPIC_HISTORY_CACHE_MISS_FAIL_CLOSED: explicit bootstrap required"
+            exit 1
+          fi
+          test -f agents/state/recent_topics.json
+          python - <<'PY'
+          from agents.script_agent import load_recent_topics
+          load_recent_topics(limit=200)
+          PY
+
+      - name: Generate script and update topic history
+        working-directory: agents
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python script_agent.py
+
+      - name: Persist cross-run topic history before downstream processing
+        uses: actions/cache/save@v4
+        with:
+          path: agents/state/recent_topics.json
+          key: pre-m7-topic-history-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Generate and QC draft video
         working-directory: agents
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-          python script_agent.py
           python voice_agent.py
           python captions_agent.py
           python storyboard_agent.py
