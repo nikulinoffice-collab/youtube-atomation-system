@@ -93,3 +93,15 @@ def test_push_qualification_covers_every_test_and_runtime_input() -> None:
         assert f"- '{watch_path}'" in qualification, (
             f"runtime/qualification input missing from push watch: {watch_path}"
         )
+
+
+def test_draft_artifact_export_is_metadata_only_and_never_uploads_video():
+    source = PUBLISH.read_text(encoding="utf-8")
+    marker = "- name: Preserve draft QC metadata (no media upload)"
+    assert marker in source
+    block = source.split(marker, 1)[1]
+    assert "uses: actions/upload-artifact@v4" in block
+    assert "path: agents/output/" not in block
+    assert "agents/output/qc_report_*.json" in block
+    assert not re.search(r"agents/output/[^\\n]*\\.(?:mp4|wav|mp3)", block)
+    assert "upload_agent.py" not in source
