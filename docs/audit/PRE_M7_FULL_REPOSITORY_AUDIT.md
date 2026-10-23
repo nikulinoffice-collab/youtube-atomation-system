@@ -26,7 +26,7 @@ Status: IN_PROGRESS
 |---|---|---|---|
 | AUD-P1-001 | P1 | Draft/full-production dependency environment previously lacked exact shared enforcement for the validated Ryan runtime and the complete production graph. DIRECT_BLOCKS=[4,6,7,10]. | CLOSED — shared 189-package exact constraints lock is enforced by qualification and draft workflows; `qwen-tts==0.1.1` and `whisperx==3.8.6` remain frozen; dependency-contract regression executed in exact-SHA M6 Qualification `38703875490`, job `116318345733`, on `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`: SUCCESS, 128 passed / 1 skipped, `pip check` PASS. |
 | AUD-P1-002 | P1 | Script topic history previously used `agents/output/recent_topics.json`; production code now uses canonical `agents/state/recent_topics.json` with state-directory creation and contract tests. DIRECT_BLOCKS=[5,7,10]. | CLOSED — implementation `22626f8b` and tests `36357bd5` are contained in exact-SHA-qualified `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS and executed the state-contract test suite. |
-| AUD-P1-003 | P1 | Cross-run anti-repeat state is not persisted by the read-only draft workflow. DIRECT_BLOCKS=[5,6,7,10]. | OPEN; design/fail-closed resolution required |
+| AUD-P1-003 | P1 | Cross-run anti-repeat history was not persisted across read-only draft runs. DIRECT_BLOCKS=[5,6,7,10]. | CLOSED — cache restore/save and explicit fail-closed cache-miss bootstrap in `.github/workflows/publish.yml@09ee25fae9f895484d295abd084d4b6c0c29628d`; malformed restored-state rejection in `agents/script_agent.py@ff9bdaf2632776ac580fb1b7e04e06098bc778ee`; restored/empty/corrupt/continuity regressions in `tests/test_pre_m7_state_contracts.py@6e52e96b5e4a9375e5d57fc0339669256d5b4d33`. Exact executable SHA `7e898c57108966d0e4c81e07a218d1a681104a88`, M6 Qualification run `39925089835`, job `120319389641` SUCCESS (140 passed / 1 skipped); no contents:write or publishing. Cache eviction/miss fails closed unless explicitly bootstrapped. |
 | AUD-P1-004 | P1 | `upload_agent.py` independently executable publishing entry point remediated with default-private plus explicit `YOUTUBE_PUBLISH_AUTHORIZED=true` as the first `main()` operation before artifact discovery/OAuth/API/network. DIRECT_BLOCKS=[8,10]. | CLOSED — corrected implementation `94b0f477b54b9f0655c8b627f66335eb7fa9b6f4` contained in exact-SHA-qualified `a65f7c69598f68868dce12f1efafb4079d2b53cb`; M6 Qualification run `37205491751`, job `111445703429` SUCCESS. |
 | AUD-P1-008 | P1 | Edge rollback executable defect was corrected and a direct no-network rollback synthesis regression was added. DIRECT_BLOCKS=[6,7,10]. | CLOSED — exact-SHA qualification succeeded for `140a5d4c454fa06b0bfa553d779e85f641893344` in M6 Qualification run `37103103913`; fix remains contained in latest qualified executable `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`. |
 | AUD-P2-001 | P2 | README and some module documentation still describe legacy Edge/automatic publishing behavior inconsistent with the current manual draft-only Ryan route. | OPEN |
@@ -41,12 +41,12 @@ Status: IN_PROGRESS
 - Frozen Ryan/Qwen identity/quality parameters have not been modified.
 
 ## Current checkpoint
-- Latest exact-SHA-qualified executable/config revision: `0fdea313c8446d2112859d4fd5420e6e3b31ffcd`.
-- M6 Qualification run `38703875490`, job `116318345733`: SUCCESS; `128 passed, 1 skipped`; full locked production install and `pip check` PASS.
+- Latest exact-SHA-qualified executable/config revision: `7e898c57108966d0e4c81e07a218d1a681104a88`.
+- M6 Qualification run `39925089835`, job `120319389641`: SUCCESS; `140 passed, 1 skipped`; locked production install and `pip check` PASS.
 - Formal Gates PASS: 1, 2, 3, 4, 8 = 5/10.
 - P0 open: 0.
-- AUD-P1-001, AUD-P1-002, AUD-P1-004 and AUD-P1-008 are CLOSED.
-- Next direct P1 closure priority is AUD-P1-003, then visual-contract and provenance/data-contract blockers for Gates 5/7/10.
+- AUD-P1-001, AUD-P1-002, AUD-P1-003, AUD-P1-004 and AUD-P1-008 are CLOSED.
+- Next direct blockers: qualification watch/enforcement regression for Gate 6, then visual-contract and provenance/data-contract for Gates 5/7/10.
 - Gate 9 remains blocked until Gates 1–8 PASS; Gate 10 remains blocked until its direct prerequisites are closed.
 
 ## Closure checkpoint — 2026-10-03
@@ -147,3 +147,12 @@ Status: IN_PROGRESS
 - `tests/test_pre_m7_dependency_contracts.py|715c33746ba2e393dca679b9db4bf398b60b8f80|REQUIRED_TEST|dependency/workflow reproducibility regression|pytest|qualification workflow|test=yes|QUALIFIED|AUD-P1-001`
 
 Safety invariants unchanged: frozen storyboard `ddd55af7ed3f7bd418b078140909750d758519bb`; frozen Ryan/Qwen identity unchanged; no publishing/upload invoked.
+
+
+## Closure synchronization — 2026-10-23
+- Exact qualifying executable HEAD: `7e898c57108966d0e4c81e07a218d1a681104a88`; M6 Qualification `39925089835`, job `120319389641`: SUCCESS, 140 passed / 1 skipped, full locked production install and `pip check` PASS.
+- AUD-P1-003 CLOSED after implementation and focused tests were both executed on that exact SHA. Prior intermediate test-only failure `39924728555` was caused by a double-escaped newline in a workflow assertion; corrected at `7e898c57` without weakening the test.
+- Changed runtime-significant blobs: `.github/workflows/publish.yml@09ee25fae9f895484d295abd084d4b6c0c29628d`, `agents/script_agent.py@ff9bdaf2632776ac580fb1b7e04e06098bc778ee`, `tests/test_pre_m7_state_contracts.py@6e52e96b5e4a9375e5d57fc0339669256d5b4d33`. All differentially inspected and exact-SHA qualified; no tracked file additions/deletions.
+- Current tracked inventory: 113/113, UNKNOWN=0. Current first-party executable/config/test/workflow denominator: 71/71. Gates 1 and 3 remain PASS; Gate 4 and Gate 8 remain PASS with no affected criteria.
+- Gates 5/7/10 remain directly blocked by the existing visual and provenance contracts. Gate 6 remains IN_PROGRESS pending explicit watched-path/enforcement regression and complete workflow-closure evidence; do not treat unrelated P1 as a Gate 6 blocker.
+- Global mutation capability: AVAILABLE (four supported Contents writes plus read-back verification in this session). Frozen `factory-v1-storyboard` remains `ddd55af7ed3f7bd418b078140909750d758519bb`; no video publishing/upload, new secrets, paid services, or Ryan/Qwen parameter changes.
