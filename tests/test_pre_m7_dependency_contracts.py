@@ -70,7 +70,9 @@ def test_push_qualification_covers_every_test_and_runtime_input() -> None:
     assert "branches: [factory-v1-voice-m6]" in qualification
     assert "github.event_name == 'push'" in qualification
     assert "run: python -m pytest -q tests" in qualification
-    assert "github.event.head_commit.message" not in qualification
+    qualify_job = qualification.split("\n  qualify:", 1)[1].split("\n  pre_m7_cleanroom_e2e:", 1)[0]
+    assert "github.event.head_commit.message" not in qualify_job
+    assert "if: ${{ inputs.milestone == 'm6.9' || github.event_name == 'push' }}" in qualify_job
     assert "git rev-parse HEAD" in qualification
     assert "GITHUB_SHA" in qualification
     assert "permissions:" + chr(10) + "  contents: read" in qualification
@@ -105,3 +107,22 @@ def test_draft_artifact_export_is_metadata_only_and_never_uploads_video():
     assert "agents/output/qc_report_*.json" in block
     assert not any(line.strip().endswith((".mp4", ".wav", ".mp3")) for line in block.splitlines())
     assert "upload_agent.py" not in source
+
+
+def test_qualification_workflow_yaml_parses_and_one_shot_e2e_is_nonpublishing():
+    import yaml
+    source = QUALIFICATION.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(source)
+    assert "jobs" in workflow and "qualify" in workflow["jobs"]
+    assert "pre_m7_cleanroom_e2e" in workflow["jobs"]
+    job = workflow["jobs"]["pre_m7_cleanroom_e2e"]
+    assert job["needs"] == "qualify"
+    assert "github.event.head_commit.message" in job["if"]
+    assert "github.event_name == 'push'" in job["if"]
+    assert job["permissions"] == {"contents": "read"}
+    text = source.split("\n  pre_m7_cleanroom_e2e:", 1)[1]
+    assert "publishing_enabled" in text and '=="m6-ryan"' in text
+    assert "upload_agent.py" not in text
+    assert "actions/upload-artifact" not in text
+    assert "secrets.GEMINI_API_KEY" in text and "secrets.PEXELS_API_KEY" in text
+    assert "m6_production_package_gate.py" in text
