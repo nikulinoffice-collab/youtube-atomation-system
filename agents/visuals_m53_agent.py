@@ -3,6 +3,8 @@ import json
 from collections import Counter
 import requests
 import visuals_agent as base
+from pathlib import Path
+from scripts.m6_run_provenance import stamp_json_artifact
 from visual_ranker import rank_scene, register
 
 ALLOWED_MOTIONS = {"static", "slow_push_in", "slow_pull_out", "pan_left", "pan_right"}
@@ -119,11 +121,19 @@ def main():
         "scenes":ranked_pools,
     }
     validate_ranked(candidate_manifest, storyboard)
+    candidate_manifest = stamp_json_artifact(
+        candidate_manifest, "pre-m7.candidates.v1", "agents.visuals_m53_agent",
+        timestamp, (storyboard_path,)
+    )
     candidate_path = base.OUTPUT_DIR / f"candidate_manifest_{timestamp}.json"
     candidate_path.write_text(json.dumps(candidate_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
     asset_manifest = {"schema_version":4,"source_storyboard":storyboard_path.name,"source_candidate_manifest":candidate_path.name,"scene_count":len(scenes),"acquisition_strategy":"semantic_ranked_with_global_diversity_penalties","motion_contract":"M5.4 preferred_motion propagated from storyboard; source cards forced static","assets":assets}
     base.validate_manifest(asset_manifest, storyboard)
+    asset_manifest = stamp_json_artifact(
+        asset_manifest, "pre-m7.assets.v1", "agents.visuals_m53_agent",
+        timestamp, (candidate_path, *(Path(a["path"]) for a in assets))
+    )
     asset_path = base.OUTPUT_DIR / f"asset_manifest_{timestamp}.json"
     asset_path.write_text(json.dumps(asset_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     (base.OUTPUT_DIR / f"visuals_{timestamp}.json").write_text(json.dumps(base.legacy_visuals(assets), indent=2, ensure_ascii=False), encoding="utf-8")
