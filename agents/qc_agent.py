@@ -10,7 +10,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from scripts.m6_run_provenance import select_run_artifact, verify_visual_chain
+from scripts.m6_run_provenance import select_run_artifact, verify_render_chain, stamp_json_artifact
 
 from visual_qc_agent import VisualQCError, run_visual_qc
 from scripts.m6_production_media import ProductionMediaError, resolve_voice_artifact
@@ -84,7 +84,7 @@ def main() -> None:
         "final": OUTPUT_DIR / f"final_{timestamp}.mp4",
     }
     for path in paths.values(): require_file(path)
-    verify_visual_chain(OUTPUT_DIR, timestamp)
+    verify_render_chain(OUTPUT_DIR, timestamp)
     timeline = read_json(paths["timeline"]); storyboard = read_json(paths["storyboard"]); asset_manifest = read_json(paths["assets"]); renderer = read_json(paths["renderer"])
     voice_probe = ffprobe(paths["voice"]); final_probe = ffprobe(paths["final"])
     audio_duration = float(voice_probe["format"]["duration"]); timeline_duration = float(timeline["duration"]); final_duration = float(final_probe["format"]["duration"]); caption_end = srt_last_end(paths["captions"])
@@ -117,6 +117,8 @@ def main() -> None:
     try: visual_qc,visual_qc_path,visual_selection_path=run_visual_qc(timestamp)
     except VisualQCError as exc: raise SystemExit(f"M5.5 visual QC failed: {exc}") from exc
     report={"schema_version":2,"milestone":"M5.5","timestamp":timestamp,"status":"PASS","checks":{"required_artifacts_present":True,"voice_matches_narration_timeline":True,"final_duration_matches_voice":True,"captions_within_narration":True,"final_resolution":f"{EXPECTED_WIDTH}x{EXPECTED_HEIGHT}","final_fps":fps,"video_stream_present":True,"audio_stream_present":True,"storyboard_scene_count":len(scenes),"asset_count":len(assets),"renderer_segment_count":len(segments),"scene_timing_preserved":True,"asset_provenance_preserved":True,"render_timeline_contiguous":True,"visual_qc_status":visual_qc["status"],"selected_assets_unique":visual_qc["checks"]["selected_asset_ids_unique"],"max_same_visual_category_run":visual_qc["checks"]["max_same_visual_category_run"],"motion_parameters_valid":visual_qc["checks"]["motion_parameters_valid"],"candidate_asset_renderer_chain_valid":True,"source_card_caption_safe_bottom_px":visual_qc["checks"]["source_card_caption_safe_bottom_px"]},"durations":{"timeline":timeline_duration,"voice":audio_duration,"captions_end":caption_end,"final":final_duration},"artifacts":{**{key:path.name for key,path in paths.items()},"visual_qc":visual_qc_path.name,"visual_selection_report":visual_selection_path.name}}
+    report=stamp_json_artifact(report, "pre-m7.qc.v1", "agents.qc_agent", timestamp,
+                              (paths["renderer"], paths["final"], visual_qc_path, visual_selection_path))
     report_path=OUTPUT_DIR/f"qc_report_{timestamp}.json"; report_path.write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding="utf-8")
     print(f"✅ M5.5 QC PASS: {report_path.name}"); print(f"✅ Visual selection report: {visual_selection_path.name}"); print(json.dumps(report["checks"],indent=2))
 
