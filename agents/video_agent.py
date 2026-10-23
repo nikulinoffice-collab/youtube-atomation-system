@@ -1,7 +1,7 @@
 """M5.4 storyboard renderer; M6.9 narration media is resolved fail-closed."""
 import html, json, random, subprocess
 from pathlib import Path
-from scripts.m6_run_provenance import select_run_artifact
+from scripts.m6_run_provenance import select_run_artifact, verify_visual_chain
 from urllib.parse import urlparse
 from scripts.m6_production_media import ProductionMediaError, resolve_voice_artifact
 
@@ -179,6 +179,7 @@ def main():
     asset_path=OUTPUT_DIR/f"asset_manifest_{timestamp}.json"; captions=OUTPUT_DIR/f"captions_{timestamp}.srt"; final=OUTPUT_DIR/f"final_{timestamp}.mp4"; renderer=OUTPUT_DIR/f"renderer_manifest_{timestamp}.json"
     for p in (asset_path,captions):
         if not p.exists(): raise SystemExit(f"Missing {p.name}; earlier stages must complete before rendering.")
+    verify_visual_chain(OUTPUT_DIR, timestamp)
     duration=get_audio_duration(voice_path); manifest=json.loads(asset_path.read_text()); assets=prepare_render_assets(validate_asset_manifest(manifest),json.loads(script_path.read_text()),timestamp); segments=build_render_segments(assets,duration)
     silent=OUTPUT_DIR/f"_silent_{timestamp}.mp4"; build_visuals_segment(segments,silent)
     renderer.write_text(json.dumps({"schema_version":2,"milestone":"M5.4","timestamp":timestamp,"strategy":"storyboard_scene_start_cuts_with_previous_scene_pause_hold","source_card_strategy":"concise_caption_safe_mobile_card","motion_policy":{"allowed_still_motions":sorted(ALLOWED_MOTIONS),"video_policy":"preserve_native_motion","source_card_policy":"static_for_readability"},"target_width":TARGET_WIDTH,"target_height":TARGET_HEIGHT,"target_fps":TARGET_FPS,"audio_duration":duration,"scene_count":len(segments),"segments":segments},indent=2),encoding="utf-8")
