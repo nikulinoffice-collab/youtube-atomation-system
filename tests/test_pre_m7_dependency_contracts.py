@@ -103,5 +103,5 @@ def test_draft_artifact_export_is_metadata_only_and_never_uploads_video():
     assert "uses: actions/upload-artifact@v4" in block
     assert "path: agents/output/" not in block
     assert "agents/output/qc_report_*.json" in block
-    assert not re.search(r"agents/output/[^\\n]*\\.(?:mp4|wav|mp3)", block)
+    assert not any(line.strip().endswith((".mp4", ".wav", ".mp3")) for line in block.splitlines())
     assert "upload_agent.py" not in source
