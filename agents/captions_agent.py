@@ -1,8 +1,8 @@
 """
 Step 3: Caption Composer
 ------------------------
-Builds readable SRT captions directly from the authoritative Edge-TTS
-narration timeline. There is no speech-to-text step.
+Builds readable SRT captions directly from the authoritative Ryan/WhisperX
+or explicit Edge-rollback narration timeline. No new transcription is run.
 """
 
 import json
