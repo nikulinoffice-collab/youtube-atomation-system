@@ -72,7 +72,7 @@ def test_draft_workflow_requires_cache_continuity_and_saves_after_script():
     workflow = (
         Path(__file__).resolve().parents[1] / ".github" / "workflows" / "publish.yml"
     ).read_text()
-    assert "permissions:\\n  contents: read" in workflow
+    assert "permissions:" + chr(10) + "  contents: read" in workflow
     assert "contents: write" not in workflow
     assert "actions/cache/restore@v4" in workflow
     assert "actions/cache/save@v4" in workflow
