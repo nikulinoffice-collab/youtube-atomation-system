@@ -62,3 +62,34 @@ def test_python_and_runner_identity_are_explicit() -> None:
     assert "runs-on: ubuntu-24.04" in publish
     assert "python-version: '3.11.17'" in qualification
     assert 'python-version: "3.11.17"' in publish
+
+
+def test_push_qualification_covers_every_test_and_runtime_input() -> None:
+    qualification = QUALIFICATION.read_text(encoding="utf-8")
+    assert "  push:" in qualification
+    assert "branches: [factory-v1-voice-m6]" in qualification
+    assert "github.event_name == 'push'" in qualification
+    assert "run: python -m pytest -q tests" in qualification
+    assert "github.event.head_commit.message" not in qualification
+    assert "git rev-parse HEAD" in qualification
+    assert "GITHUB_SHA" in qualification
+    assert "permissions:" + chr(10) + "  contents: read" in qualification
+    assert "contents: write" not in qualification
+
+    required_watch_paths = {
+        "agents/**",
+        "scripts/**",
+        "config/**",
+        "tests/**",
+        "requirements.txt",
+        "constraints/**",
+        "docs/m6/benchmark_corpus.json",
+    }
+    workflows = ROOT / ".github" / "workflows"
+    required_watch_paths.update(
+        f".github/workflows/{path.name}" for path in workflows.glob("*.yml")
+    )
+    for watch_path in sorted(required_watch_paths):
+        assert f"- '{watch_path}'" in qualification, (
+            f"runtime/qualification input missing from push watch: {watch_path}"
+        )
