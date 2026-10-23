@@ -13,6 +13,7 @@ import os
 import re
 import time
 from pathlib import Path
+from scripts.m6_run_provenance import select_run_artifact
 from typing import Any
 
 from dotenv import load_dotenv
@@ -55,10 +56,7 @@ class StoryboardValidationError(ValueError):
 
 
 def find_latest_timeline() -> Path:
-    files = sorted(OUTPUT_DIR.glob("narration_timeline_*.json"))
-    if not files:
-        raise SystemExit("No narration_timeline_*.json found. Run voice_agent.py first.")
-    return files[-1]
+    return select_run_artifact(OUTPUT_DIR, "narration_timeline_", "narration_timeline_*.json")
 
 
 def canonical_scene_text(words: list[dict], start_word: int, end_word: int) -> str:
